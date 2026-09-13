@@ -21,6 +21,9 @@
     --opp:#ef5548;
     --opp-dark:#7a231d;
     --gk:#f2c14e;
+    --post-def:#4f8fdc;
+    --post-mid:#4caf6d;
+    --post-att:#e0714a;
     --pass:#f4f1ea;
     --danger:#e2574c;
     --pitch-a:#1c6b3a;
@@ -38,7 +41,9 @@
   .brand h1{font-size:30px;font-weight:700;margin:0;color:var(--text);}
   .brand h1 .accent{color:var(--accent);}
   .brand p{margin:2px 0 0;font-size:13px;color:var(--text-dim);}
-  .header-actions{display:flex;gap:8px;}
+  .header-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+  .export-opt{display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text-dim);white-space:nowrap;}
+  .export-opt input{accent-color:var(--accent);}
   .icon-btn{
     border:1px solid var(--border);background:var(--panel-2);color:var(--text);
     padding:8px 13px;border-radius:8px;font-size:12.5px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;
@@ -214,6 +219,7 @@
     </div>
     <div class="header-actions">
       <button class="icon-btn" id="btnMenuLeft" style="display:none;">☰ Effectifs</button>
+      <label class="export-opt"><input type="checkbox" id="chkHideAnnotations">Sans flèches/annotations</label>
       <button class="icon-btn" id="btnExport">⬇ Image PNG</button>
       <button class="icon-btn" id="btnExportVideo">🎬 Exporter en vidéo</button>
       <button class="icon-btn" id="btnMenuRight" style="display:none;">Chronologie ☰</button>
@@ -543,19 +549,19 @@
     var attN=Math.max(0, outfield-defN-midN);
     while(defN+midN+attN>outfield){ if(attN>0)attN--; else if(midN>0)midN--; else if(defN>0)defN--; }
     while(defN+midN+attN<outfield){ attN++; }
-    function spread(n,x,yMin,yMax){
+    function spread(n,x,yMin,yMax,post){
       var arr=[]; if(n<=0) return arr;
-      if(n===1){ arr.push({x:x,y:(yMin+yMax)/2}); return arr; }
-      for(var i=0;i<n;i++){ arr.push({x:x,y:yMin+(yMax-yMin)*(i/(n-1))}); }
+      if(n===1){ arr.push({x:x,y:(yMin+yMax)/2,post:post}); return arr; }
+      for(var i=0;i<n;i++){ arr.push({x:x,y:yMin+(yMax-yMin)*(i/(n-1)),post:post}); }
       return arr;
     }
     var gkX,defX,midX,attX;
     if(side==='team'){ gkX=6; defX=22; midX=42; attX=60; }
     else { gkX=PL-6; defX=PL-22; midX=PL-42; attX=PL-60; }
-    if(count>0) pts.push({x:gkX,y:PW/2});
-    pts = pts.concat(spread(defN,defX,8,PW-8));
-    pts = pts.concat(spread(midN,midX,8,PW-8));
-    pts = pts.concat(spread(attN,attX,12,PW-12));
+    if(count>0) pts.push({x:gkX,y:PW/2,post:'gk'});
+    pts = pts.concat(spread(defN,defX,8,PW-8,'def'));
+    pts = pts.concat(spread(midN,midX,8,PW-8,'mid'));
+    pts = pts.concat(spread(attN,attX,12,PW-12,'att'));
     return pts.slice(0,count);
   }
 
@@ -564,11 +570,11 @@
     state.players=[];
     var tp=autoLayoutSide('team', state.teamCount);
     for(var i=0;i<tp.length;i++){
-      state.players.push({id:'team'+(i+1), side:'team', num:(i+1), x:tp[i].x, y:tp[i].y, isGK:(i===0)});
+      state.players.push({id:'team'+(i+1), side:'team', num:(i+1), x:tp[i].x, y:tp[i].y, isGK:(i===0), post:tp[i].post});
     }
     var op=autoLayoutSide('opp', state.oppCount);
     for(var j=0;j<op.length;j++){
-      state.players.push({id:'opp'+(j+1), side:'opp', num:(j+1), x:op[j].x, y:op[j].y, isGK:(j===0)});
+      state.players.push({id:'opp'+(j+1), side:'opp', num:(j+1), x:op[j].x, y:op[j].y, isGK:(j===0), post:op[j].post});
     }
     state.ball={x:52.5,y:34};
     state.compoSystem=null;
@@ -583,8 +589,8 @@
     } else if(newCount > existing.length){
       var layout = autoLayoutSide(side, newCount);
       for(var i=existing.length; i<newCount; i++){
-        var pos = layout[i] || {x:52.5, y:34};
-        existing.push({id:side+(i+1), side:side, num:(i+1), x:pos.x, y:pos.y, isGK:(i===0)});
+        var pos = layout[i] || {x:52.5, y:34, post:'mid'};
+        existing.push({id:side+(i+1), side:side, num:(i+1), x:pos.x, y:pos.y, isGK:(i===0), post:pos.post||'mid'});
       }
     }
     state.players = others.concat(existing);
@@ -610,22 +616,25 @@
   state.compoFormat='10'; state.compoSystem=null;
 
   function lineMargin(n){ if(n<=2) return 22; if(n===3) return 13; return 6; }
-  function spreadLine(n,x){
+  function spreadLine(n,x,post){
     if(n<=0) return [];
-    if(n===1) return [{x:x,y:34}];
+    if(n===1) return [{x:x,y:34,post:post}];
     var m=lineMargin(n);
     var arr=[];
-    for(var k=0;k<n;k++) arr.push({x:x, y:m+(68-2*m)*(k/(n-1))});
+    for(var k=0;k<n;k++) arr.push({x:x, y:m+(68-2*m)*(k/(n-1)), post:post});
     return arr;
   }
   function formationPositions(groups){
-    var pts=[{x:6,y:34}];
+    var pts=[{x:6,y:34,post:'gk'}];
     var lines=groups.slice(1);
     var nLines=lines.length;
     var xs=[];
     if(nLines===1) xs=[35];
     else for(var i=0;i<nLines;i++) xs.push(18 + (64-18)*(i/(nLines-1)));
-    lines.forEach(function(n,li){ pts=pts.concat(spreadLine(n, xs[li])); });
+    lines.forEach(function(n,li){
+      var post = li===0 ? 'def' : (li===nLines-1 ? 'att' : 'mid');
+      pts=pts.concat(spreadLine(n, xs[li], post));
+    });
     return pts;
   }
   function applyFormation(formationStr){
@@ -637,7 +646,7 @@
     document.getElementById('teamCountVal').textContent=count;
     state.players=state.players.filter(function(p){return p.side!=='team';});
     for(var i=0;i<count;i++){
-      state.players.push({id:'team'+(i+1), side:'team', num:(i+1), x:pts[i].x, y:pts[i].y, isGK:(i===0)});
+      state.players.push({id:'team'+(i+1), side:'team', num:(i+1), x:pts[i].x, y:pts[i].y, isGK:(i===0), post:pts[i].post});
     }
     clearRuns();
     state.compoSystem=formationStr;
@@ -714,6 +723,29 @@
     if(run.kind==='pass') return run.receiverId ? ('Ballon → '+actorLabel(run.receiverId)) : 'Ballon → point libre';
     return actorLabel(run.actorId);
   }
+  function postName(post){
+    return post==='def' ? 'Défenseur' : post==='mid' ? 'Milieu' : post==='att' ? 'Attaquant' : 'Joueur';
+  }
+  function chronoActorLabel(id){
+    if(id==='ball') return 'Ballon';
+    var p=getPlayer(id); if(!p) return '?';
+    if(p.isGK) return 'Gardien ('+p.num+')';
+    return postName(p.post)+(p.side==='opp' ? ' adv.' : '')+' ('+p.num+')';
+  }
+  function chronoRunLabel(run){
+    if(run.kind==='pass') return run.receiverId ? ('Ballon → '+chronoActorLabel(run.receiverId)) : 'Ballon → point libre';
+    return chronoActorLabel(run.actorId);
+  }
+  function chronoRunColor(run){
+    if(run.kind==='pass') return 'var(--pass)';
+    var p=getPlayer(run.actorId);
+    if(!p) return runColor(run);
+    if(p.isGK) return 'var(--gk)';
+    if(p.post==='def') return 'var(--post-def)';
+    if(p.post==='mid') return 'var(--post-mid)';
+    if(p.post==='att') return 'var(--post-att)';
+    return runColor(run);
+  }
   function runColor(run){
     if(run.color) return run.color;
     if(run.kind==='pass') return 'var(--pass)';
@@ -741,10 +773,11 @@
   function circledNum(n){ return n<=10 ? CIRCLED[n-1] : '('+n+')'; }
 
   function addRun(kind, actorId, from, to, meta){
+    var chainId = (kind==='move') ? 'ball' : actorId;
     var run = {
       id: uid('r'), kind:kind, actorId:actorId,
       from:{x:from.x,y:from.y}, to:{x:to.x,y:to.y},
-      start: Math.max(0, maxEndForActor(actorId)),
+      start: Math.max(0, maxEndForActor(chainId)),
       duration: kind==='pass' ? 0.9 : DUR[state.quickDuration],
       color:null,
       strokeStyle: 'dotted',
@@ -1184,11 +1217,11 @@
       var row=document.createElement('div'); row.className='chrono-row'+(state.pickedRun===run.id?' picked':'');
       var lab=document.createElement('div'); lab.className='chrono-label';
       lab.addEventListener('click', function(){ pickRun(run.id); });
-      var dot=document.createElement('span'); dot.className='dot'; dot.style.background=runColor(run);
+      var dot=document.createElement('span'); dot.className='dot'; dot.style.background=chronoRunColor(run);
       lab.appendChild(dot);
       var info=idxInfo[run.id];
       var txt=document.createElement('span');
-      txt.textContent=(info && info.total>1 ? circledNum(info.index)+' ' : '')+runLabel(run);
+      txt.textContent=(info && info.total>1 ? circledNum(info.index)+' ' : '')+chronoRunLabel(run);
       lab.appendChild(txt);
       row.appendChild(lab);
       var track=document.createElement('div'); track.className='chrono-track';
@@ -1196,7 +1229,7 @@
       var bar=document.createElement('div'); bar.className='chrono-bar';
       bar.style.left=(run.start/m*100)+'%';
       bar.style.width=(Math.max(run.duration,0.15)/m*100)+'%';
-      bar.style.background=runColor(run);
+      bar.style.background=chronoRunColor(run);
       track.appendChild(bar);
       row.appendChild(track);
       wrap.appendChild(row);
@@ -1820,7 +1853,7 @@
       var hint=document.getElementById('hintText');
       if(state.mode==='position') hint.textContent='Glissez un joueur ou le ballon sur le terrain pour le positionner.';
       else if(state.mode==='pass') hint.textContent="Cliquez sur le ballon puis à l'endroit où il doit arriver — ou glissez le ballon directement. Chaque nouvelle passe s'enchaîne automatiquement après la précédente.";
-      else if(state.mode==='move') hint.textContent="Cliquez sur un joueur puis à l'endroit où il doit se déplacer — ou glissez-le directement. Chaque nouveau déplacement s'enchaîne automatiquement après le précédent.";
+      else if(state.mode==='move') hint.textContent="Cliquez sur un joueur puis à l'endroit où il doit se déplacer — ou glissez-le directement. Le déplacement démarre automatiquement à la fin du dernier déplacement du ballon.";
       else if(state.mode==='link') hint.textContent='Cliquez sur au moins 2 joueurs (ou le ballon) pour les relier par un trait ; 3 ou plus pour fermer une zone remplie.';
       else if(state.mode==='shape-rect') hint.textContent='Cliquez-glissez sur le terrain pour dessiner un rectangle.';
       else if(state.mode==='shape-ellipse') hint.textContent='Cliquez-glissez pour dessiner un cercle, puis utilisez les poignées orange pour le déformer en ellipse.';
@@ -1920,22 +1953,33 @@
     return {w:w,h:h};
   }
 
+  function withAnnotationsHidden(hide, fn){
+    var prevArrows=gArrows.style.display, prevShapes=gShapes.style.display, prevLinks=gLinks.style.display;
+    if(hide){ gArrows.style.display='none'; gShapes.style.display='none'; gLinks.style.display='none'; }
+    try{ fn(); } finally {
+      if(hide){ gArrows.style.display=prevArrows; gShapes.style.display=prevShapes; gLinks.style.display=prevLinks; }
+    }
+  }
+
   document.getElementById('btnExport').addEventListener('click', function(){
-    var xml=serializeSvgWithStyles();
-    var size=computeExportCanvasSize(1600);
-    var svg64=btoa(unescape(encodeURIComponent(xml)));
-    var img=new Image();
-    img.onload=function(){
-      var canvas=document.createElement('canvas');
-      canvas.width=size.w; canvas.height=size.h;
-      var ctx=canvas.getContext('2d');
-      ctx.drawImage(img,0,0,size.w,size.h);
-      var a=document.createElement('a');
-      a.download='ardoise-tactique.png';
-      a.href=canvas.toDataURL('image/png');
-      a.click();
-    };
-    img.src='data:image/svg+xml;base64,'+svg64;
+    var hide=document.getElementById('chkHideAnnotations').checked;
+    withAnnotationsHidden(hide, function(){
+      var xml=serializeSvgWithStyles();
+      var size=computeExportCanvasSize(1600);
+      var svg64=btoa(unescape(encodeURIComponent(xml)));
+      var img=new Image();
+      img.onload=function(){
+        var canvas=document.createElement('canvas');
+        canvas.width=size.w; canvas.height=size.h;
+        var ctx=canvas.getContext('2d');
+        ctx.drawImage(img,0,0,size.w,size.h);
+        var a=document.createElement('a');
+        a.download='ardoise-tactique.png';
+        a.href=canvas.toDataURL('image/png');
+        a.click();
+      };
+      img.src='data:image/svg+xml;base64,'+svg64;
+    });
   });
 
   document.getElementById('btnExportVideo').addEventListener('click', function(){
@@ -1956,6 +2000,10 @@
     var originalBall=JSON.parse(JSON.stringify(state.ball));
     var originalPlayTime=state.playTime;
 
+    var hideAnnot=document.getElementById('chkHideAnnotations').checked;
+    var prevArrows=gArrows.style.display, prevShapes=gShapes.style.display, prevLinks=gLinks.style.display;
+    if(hideAnnot){ gArrows.style.display='none'; gShapes.style.display='none'; gLinks.style.display='none'; }
+
     var preRoll=0.5, postRoll=0.7;
     var animEnd=maxEnd();
     var totalDuration=animEnd+preRoll+postRoll;
@@ -1965,11 +2013,13 @@
     canvas.width=size.w; canvas.height=size.h;
     var ctx=canvas.getContext('2d');
 
-    var mimeCandidates=['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'];
+    var mimeCandidates=['video/mp4;codecs=avc1','video/mp4;codecs=h264','video/mp4','video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'];
     var mime='';
     for(var i=0;i<mimeCandidates.length;i++){
       if(MediaRecorder.isTypeSupported(mimeCandidates[i])){ mime=mimeCandidates[i]; break; }
     }
+    var isMp4 = mime.indexOf('mp4')!==-1;
+    var ext = isMp4 ? 'mp4' : 'webm';
 
     var stream=canvas.captureStream(25);
     var recorder = mime ? new MediaRecorder(stream,{mimeType:mime}) : new MediaRecorder(stream);
@@ -1980,15 +2030,18 @@
       var blob=new Blob(chunks, {type: mime||'video/webm'});
       var url=URL.createObjectURL(blob);
       var a=document.createElement('a');
-      a.href=url; a.download='circuit-tactique.webm';
+      a.href=url; a.download='circuit-tactique.'+ext;
       a.click();
       setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
       state.players=originalPlayers;
       state.ball=originalBall;
       state.playTime=originalPlayTime;
+      if(hideAnnot){ gArrows.style.display=prevArrows; gShapes.style.display=prevShapes; gLinks.style.display=prevLinks; }
       render();
       btn.disabled=false;
-      document.getElementById('statusText').textContent='Vidéo exportée.';
+      document.getElementById('statusText').textContent = isMp4
+        ? 'Vidéo exportée (MP4).'
+        : 'Vidéo exportée (WebM — ce navigateur ne permet pas l\'export MP4 direct ; le fichier reste lisible et partageable, y compris via VLC ou une conversion en ligne).';
     };
 
     btn.disabled=true;
