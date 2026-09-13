@@ -215,6 +215,7 @@
     <div class="header-actions">
       <button class="icon-btn" id="btnMenuLeft" style="display:none;">☰ Effectifs</button>
       <button class="icon-btn" id="btnExport">⬇ Image PNG</button>
+      <button class="icon-btn" id="btnExportVideo">🎬 Exporter en vidéo</button>
       <button class="icon-btn" id="btnMenuRight" style="display:none;">Chronologie ☰</button>
     </div>
   </div>
@@ -1898,26 +1899,123 @@
   document.getElementById('btnCloseRight').addEventListener('click', closeSides);
   document.getElementById('mobileBackdrop').addEventListener('click', closeSides);
 
-  document.getElementById('btnExport').addEventListener('click', function(){
+  var ROOT_VAR_NAMES=['--bg','--panel','--panel-2','--border','--text','--text-dim','--accent','--accent-dim','--team','--team-dark','--opp','--opp-dark','--gk','--pass','--danger','--pitch-a','--pitch-b','--line'];
+  function serializeSvgWithStyles(){
     var clone=svg.cloneNode(true);
     clone.setAttribute('xmlns','http://www.w3.org/2000/svg');
+    var cs=getComputedStyle(document.documentElement);
+    var vars='';
+    ROOT_VAR_NAMES.forEach(function(n){ vars+=n+':'+cs.getPropertyValue(n).trim()+';'; });
+    var styleEl=document.createElementNS('http://www.w3.org/2000/svg','style');
+    styleEl.textContent=':root{'+vars+'}';
+    clone.insertBefore(styleEl, clone.firstChild);
+    return new XMLSerializer().serializeToString(clone);
+  }
+  function computeExportCanvasSize(targetLong){
     var vb=svg.getAttribute('viewBox').split(' ').map(Number);
-    var scale=6;
-    var w=vb[2]*scale, h=vb[3]*scale;
-    var xml=new XMLSerializer().serializeToString(clone);
+    var w,h;
+    if(vb[2]>=vb[3]){ w=targetLong; h=Math.round(targetLong*vb[3]/vb[2]); }
+    else { h=targetLong; w=Math.round(targetLong*vb[2]/vb[3]); }
+    w-=w%2; h-=h%2;
+    return {w:w,h:h};
+  }
+
+  document.getElementById('btnExport').addEventListener('click', function(){
+    var xml=serializeSvgWithStyles();
+    var size=computeExportCanvasSize(1600);
     var svg64=btoa(unescape(encodeURIComponent(xml)));
     var img=new Image();
     img.onload=function(){
       var canvas=document.createElement('canvas');
-      canvas.width=w; canvas.height=h;
+      canvas.width=size.w; canvas.height=size.h;
       var ctx=canvas.getContext('2d');
-      ctx.drawImage(img,0,0,w,h);
+      ctx.drawImage(img,0,0,size.w,size.h);
       var a=document.createElement('a');
       a.download='ardoise-tactique.png';
       a.href=canvas.toDataURL('image/png');
       a.click();
     };
     img.src='data:image/svg+xml;base64,'+svg64;
+  });
+
+  document.getElementById('btnExportVideo').addEventListener('click', function(){
+    var btn=document.getElementById('btnExportVideo');
+    if(btn.disabled) return;
+    if(!window.MediaRecorder || !('captureStream' in HTMLCanvasElement.prototype)){
+      alert("L'export vidéo n'est pas pris en charge par ce navigateur. Essayez avec une version récente de Chrome, Edge ou Firefox.");
+      return;
+    }
+    if(state.runs.length===0){
+      alert('Ajoutez au moins une course (passe ou déplacement) avant d\'exporter une vidéo.');
+      return;
+    }
+
+    var wasPlaying=state.playing;
+    if(wasPlaying) pausePlayback();
+    var originalPlayers=JSON.parse(JSON.stringify(state.players));
+    var originalBall=JSON.parse(JSON.stringify(state.ball));
+    var originalPlayTime=state.playTime;
+
+    var preRoll=0.5, postRoll=0.7;
+    var animEnd=maxEnd();
+    var totalDuration=animEnd+preRoll+postRoll;
+
+    var size=computeExportCanvasSize(1280);
+    var canvas=document.createElement('canvas');
+    canvas.width=size.w; canvas.height=size.h;
+    var ctx=canvas.getContext('2d');
+
+    var mimeCandidates=['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'];
+    var mime='';
+    for(var i=0;i<mimeCandidates.length;i++){
+      if(MediaRecorder.isTypeSupported(mimeCandidates[i])){ mime=mimeCandidates[i]; break; }
+    }
+
+    var stream=canvas.captureStream(25);
+    var recorder = mime ? new MediaRecorder(stream,{mimeType:mime}) : new MediaRecorder(stream);
+    var chunks=[];
+    recorder.ondataavailable=function(e){ if(e.data && e.data.size>0) chunks.push(e.data); };
+    var stopped=false;
+    recorder.onstop=function(){
+      var blob=new Blob(chunks, {type: mime||'video/webm'});
+      var url=URL.createObjectURL(blob);
+      var a=document.createElement('a');
+      a.href=url; a.download='circuit-tactique.webm';
+      a.click();
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+      state.players=originalPlayers;
+      state.ball=originalBall;
+      state.playTime=originalPlayTime;
+      render();
+      btn.disabled=false;
+      document.getElementById('statusText').textContent='Vidéo exportée.';
+    };
+
+    btn.disabled=true;
+    document.getElementById('statusText').textContent='Enregistrement de la vidéo… 0.0 / '+totalDuration.toFixed(1)+'s';
+    var startTs=performance.now();
+
+    function frame(){
+      var elapsedReal=(performance.now()-startTs)/1000;
+      if(elapsedReal>totalDuration || stopped){
+        if(!stopped){ stopped=true; recorder.stop(); }
+        return;
+      }
+      var t=clamp(elapsedReal-preRoll, 0, animEnd);
+      applyPlaybackPositions(t);
+      document.getElementById('statusText').textContent='Enregistrement de la vidéo… '+elapsedReal.toFixed(1)+' / '+totalDuration.toFixed(1)+'s';
+      var svgStr=serializeSvgWithStyles();
+      var img=new Image();
+      img.onload=function(){
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+        ctx.drawImage(img,0,0,canvas.width,canvas.height);
+        requestAnimationFrame(frame);
+      };
+      img.onerror=function(){ requestAnimationFrame(frame); };
+      img.src='data:image/svg+xml;base64,'+btoa(unescape(encodeURIComponent(svgStr)));
+    }
+    recorder.start();
+    frame();
   });
 
   function checkMobileButtons(){
