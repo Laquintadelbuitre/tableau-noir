@@ -845,9 +845,9 @@
     c.setAttribute('cx',bx); c.setAttribute('cy',by); c.setAttribute('r',br);
     c.setAttribute('fill','var(--accent)'); c.setAttribute('stroke','#171100'); c.setAttribute('stroke-width','0.2');
     g.appendChild(c);
-    var wrap=uprightWrap(bx,by);
+    var wrap=uprightWrap(bx,by+br*0.36);
     var t=ns('text');
-    t.setAttribute('x',0); t.setAttribute('y',br*0.36); t.setAttribute('text-anchor','middle');
+    t.setAttribute('x',0); t.setAttribute('y',0); t.setAttribute('text-anchor','middle');
     t.setAttribute('font-size', br*1.35); t.setAttribute('font-family',"'Barlow Condensed'"); t.setAttribute('font-weight','700');
     t.setAttribute('fill','#412402');
     t.textContent=String(num);
