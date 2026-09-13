@@ -156,7 +156,9 @@
   .chrono-row.picked{background:#1c2a20;outline:1px solid var(--accent-dim);}
   .chrono-label{width:118px;flex:none;font-size:10.5px;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:5px;}
   .chrono-track{flex:1;position:relative;height:16px;background:#1a201c;border-radius:4px;overflow:hidden;}
-  .chrono-bar{position:absolute;top:2px;bottom:2px;border-radius:3px;}
+  .chrono-bar{position:absolute;top:2px;bottom:2px;border-radius:3px;cursor:grab;}
+  .chrono-bar:active{cursor:grabbing;}
+  .chrono-sync-guide{position:absolute;top:0;bottom:0;width:0;border-left:1.5px dashed var(--accent);pointer-events:none;z-index:6;}
   .chrono-ruler{display:flex;justify-content:space-between;font-size:9.5px;color:var(--text-dim);margin:2px 4px 8px 126px;}
   .chrono-playhead{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--accent);pointer-events:none;}
   .chrono-wrap{position:relative;margin-bottom:10px;}
@@ -1151,8 +1153,8 @@
     var sorted=state.runs.slice().sort(function(a,b){ return a.start-b.start; });
     sorted.forEach(function(run){
       var row=document.createElement('div'); row.className='chrono-row'+(state.pickedRun===run.id?' picked':'');
-      row.addEventListener('click', function(){ pickRun(run.id); });
       var lab=document.createElement('div'); lab.className='chrono-label';
+      lab.addEventListener('click', function(){ pickRun(run.id); });
       var dot=document.createElement('span'); dot.className='dot'; dot.style.background=runColor(run);
       lab.appendChild(dot);
       var info=idxInfo[run.id];
@@ -1161,6 +1163,7 @@
       lab.appendChild(txt);
       row.appendChild(lab);
       var track=document.createElement('div'); track.className='chrono-track';
+      track.addEventListener('click', function(){ pickRun(run.id); });
       var bar=document.createElement('div'); bar.className='chrono-bar';
       bar.style.left=(run.start/m*100)+'%';
       bar.style.width=(Math.max(run.duration,0.15)/m*100)+'%';
@@ -1168,6 +1171,7 @@
       track.appendChild(bar);
       row.appendChild(track);
       wrap.appendChild(row);
+      bindChronoBarDrag(bar, run, track, wrap);
     });
     host.appendChild(wrap);
 
@@ -1178,6 +1182,64 @@
         tr.appendChild(ph);
       });
     }
+  }
+
+  function bindChronoBarDrag(bar, run, track, wrap){
+    var st=null;
+    bar.addEventListener('click', function(e){ e.stopPropagation(); });
+    bar.addEventListener('pointerdown', function(e){
+      e.stopPropagation();
+      var t=e.touches&&e.touches[0]?e.touches[0]:e;
+      var m0=maxEnd();
+      var trackRect=track.getBoundingClientRect();
+      st={startClientX:t.clientX, startStart:run.start, m:m0, trackWidth:trackRect.width, moved:false};
+      window.addEventListener('pointermove', onBarMove);
+      window.addEventListener('pointerup', onBarUp);
+    });
+    function onBarMove(e){
+      if(!st) return;
+      var t=e.touches&&e.touches[0]?e.touches[0]:e;
+      var dx=t.clientX-st.startClientX;
+      if(Math.abs(dx)>4) st.moved=true;
+      if(!st.moved) return;
+      var deltaTime = dx/st.trackWidth*st.m;
+      var newStart = Math.max(0, st.startStart+deltaTime);
+      var snapTime=null;
+      state.runs.forEach(function(r){
+        if(r.id===run.id) return;
+        [r.start, r.start+r.duration].forEach(function(tm){
+          if(snapTime===null && Math.abs(tm-newStart)<0.12) snapTime=tm;
+        });
+      });
+      if(snapTime!==null) newStart=snapTime;
+      run.start=newStart;
+      bar.style.left=(newStart/st.m*100)+'%';
+      updateChronoSyncGuide(wrap, track, snapTime, st.m);
+    }
+    function onBarUp(){
+      window.removeEventListener('pointermove', onBarMove);
+      window.removeEventListener('pointerup', onBarUp);
+      clearChronoSyncGuide(wrap);
+      if(!st) return;
+      var moved=st.moved;
+      st=null;
+      if(!moved){ pickRun(run.id); return; }
+      renderAll();
+    }
+  }
+  function clearChronoSyncGuide(wrap){
+    var g=wrap.querySelector('.chrono-sync-guide');
+    if(g) g.remove();
+  }
+  function updateChronoSyncGuide(wrap, track, time, m){
+    clearChronoSyncGuide(wrap);
+    if(time===null) return;
+    var wrapRect=wrap.getBoundingClientRect();
+    var trackRect=track.getBoundingClientRect();
+    var leftPx = (trackRect.left - wrapRect.left) + (time/m)*trackRect.width;
+    var g=document.createElement('div'); g.className='chrono-sync-guide';
+    g.style.left=leftPx+'px';
+    wrap.appendChild(g);
   }
 
   function colorRow(label,val,onInput){
@@ -1309,13 +1371,10 @@
       if(!state.selection || state.selection===id){
         if(isValidSourceToken(state.mode,id)){
           var actorObj=getPlayer(id);
-          var runs=runsForActor(id);
-          var lastRun = runs.length ? runs[runs.length-1] : null;
           drag.traj = {
             kind: state.mode,
             actorId: id,
-            existingRun: lastRun,
-            fromPoint: lastRun ? {x:lastRun.from.x,y:lastRun.from.y} : {x:actorObj.x,y:actorObj.y}
+            fromPoint: {x:actorObj.x, y:actorObj.y}
           };
         }
       } else {
@@ -1417,13 +1476,7 @@
       if(moved){
         var actorObj=getPlayer(traj.actorId);
         var finalPt={x:actorObj.x, y:actorObj.y};
-        if(traj.existingRun){
-          traj.existingRun.to={x:finalPt.x,y:finalPt.y};
-          var c=defaultControl(traj.existingRun.from, traj.existingRun.to);
-          traj.existingRun.cx=c.x; traj.existingRun.cy=c.y;
-          if(traj.kind==='pass'){ traj.existingRun.receiverId=findPlayerNear(finalPt.x,finalPt.y,2.5); }
-          renderAll();
-        } else if(traj.kind==='pass'){
+        if(traj.kind==='pass'){
           addRun('pass','ball', traj.fromPoint, finalPt, {receiverId:findPlayerNear(finalPt.x,finalPt.y,2.5)});
         } else {
           addRun('move', traj.actorId, traj.fromPoint, finalPt);
@@ -1737,8 +1790,8 @@
       document.getElementById('speedBlock').style.display = state.mode==='move' ? 'block':'none';
       var hint=document.getElementById('hintText');
       if(state.mode==='position') hint.textContent='Glissez un joueur ou le ballon sur le terrain pour le positionner.';
-      else if(state.mode==='pass') hint.textContent="Cliquez sur le ballon puis à l'endroit où il doit arriver — ou glissez le ballon directement. En glissant à nouveau le ballon, vous ajustez la dernière passe.";
-      else if(state.mode==='move') hint.textContent="Cliquez sur un joueur puis à l'endroit où il doit se déplacer — ou glissez-le directement. En le glissant à nouveau, vous ajustez son dernier déplacement.";
+      else if(state.mode==='pass') hint.textContent="Cliquez sur le ballon puis à l'endroit où il doit arriver — ou glissez le ballon directement. Chaque nouvelle passe s'enchaîne automatiquement après la précédente.";
+      else if(state.mode==='move') hint.textContent="Cliquez sur un joueur puis à l'endroit où il doit se déplacer — ou glissez-le directement. Chaque nouveau déplacement s'enchaîne automatiquement après le précédent.";
       else if(state.mode==='link') hint.textContent='Cliquez sur au moins 2 joueurs (ou le ballon) pour les relier par un trait ; 3 ou plus pour fermer une zone remplie.';
       else if(state.mode==='shape-rect') hint.textContent='Cliquez-glissez sur le terrain pour dessiner un rectangle.';
       else if(state.mode==='shape-ellipse') hint.textContent='Cliquez-glissez pour dessiner un cercle, puis utilisez les poignées orange pour le déformer en ellipse.';
