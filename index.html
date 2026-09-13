@@ -1605,6 +1605,32 @@
       gGuides.appendChild(h);
     }
   }
+  function findEquidistantPairs(excludeId,x,y,tol){
+    var pairs=[];
+    ['team','opp'].forEach(function(side){
+      var pts=state.players.filter(function(p){ return p.side===side && p.id!==excludeId; });
+      for(var i=0;i<pts.length;i++){
+        for(var j=i+1;j<pts.length;j++){
+          var dA=Math.hypot(pts[i].x-x,pts[i].y-y);
+          var dB=Math.hypot(pts[j].x-x,pts[j].y-y);
+          if(dA>1.5 && dB>1.5 && Math.abs(dA-dB)<tol){
+            pairs.push({a:pts[i], b:pts[j]});
+          }
+        }
+      }
+    });
+    return pairs.slice(0,2);
+  }
+  function drawEquidistanceGuides(x,y,pairs){
+    pairs.forEach(function(pr){
+      [pr.a,pr.b].forEach(function(pt){
+        var l=ns('line');
+        l.setAttribute('x1',x); l.setAttribute('y1',y); l.setAttribute('x2',pt.x); l.setAttribute('y2',pt.y);
+        l.setAttribute('stroke','var(--accent)'); l.setAttribute('stroke-width','0.3'); l.setAttribute('stroke-dasharray','1,1'); l.setAttribute('stroke-linecap','round');
+        gGuides.appendChild(l);
+      });
+    });
+  }
   function drawTrajPreview(from,to,kind){
     var p=ns('path');
     p.setAttribute('d','M'+from.x+','+from.y+' L'+to.x+','+to.y);
@@ -1637,6 +1663,8 @@
       if(snap.y!==null) y=snap.y;
       drag.traj.lastPoint={x:x,y:y};
       drawGuides(snap);
+      var eqPairsT=findEquidistantPairs(drag.traj.actorId,x,y,0.6);
+      if(eqPairsT.length) drawEquidistanceGuides(x,y,eqPairsT);
       drawTrajPreview(drag.traj.fromPoint, {x:x,y:y}, drag.traj.kind);
       if(drag.traj.kind==='pass'){
         var actorObj=getPlayer(drag.traj.actorId);
@@ -1661,6 +1689,8 @@
         if(snap2.y!==null) y2=snap2.y;
         obj.x=x2; obj.y=y2;
         drawGuides(snap2);
+        var eqPairs=findEquidistantPairs(drag.id,x2,y2,0.6);
+        if(eqPairs.length) drawEquidistanceGuides(x2,y2,eqPairs);
         renderTokens();
       }
     }
