@@ -11,6 +11,7 @@
     --bg:#0a0e0d;
     --panel:#111613;
     --panel-2:#171d19;
+    --panel-3:#1b221c;
     --border:#262d28;
     --text:#eef1ee;
     --text-dim:#8a938c;
@@ -33,14 +34,19 @@
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;height:100%;}
   h1,h2,h3{font-family:'Barlow Condensed',sans-serif;letter-spacing:.01em;}
-  button,input{font-family:'Inter',sans-serif;}
+  button,input,select{font-family:'Inter',sans-serif;}
   .app{display:flex;flex-direction:column;height:100vh;min-height:660px;}
 
   /* ---------- Header ---------- */
-  .header{padding:16px 22px 10px;background:var(--panel);border-bottom:1px solid var(--border);display:flex;align-items:flex-end;justify-content:space-between;gap:14px;flex-wrap:wrap;}
-  .brand h1{font-size:30px;font-weight:700;margin:0;color:var(--text);}
-  .brand h1 .accent{color:var(--accent);}
-  .brand p{margin:2px 0 0;font-size:13px;color:var(--text-dim);}
+  .header{padding:12px 20px;background:var(--panel);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;}
+  .brand{display:flex;align-items:center;gap:10px;}
+  .brand .mark{
+    width:34px;height:34px;border-radius:9px;background:linear-gradient(145deg,var(--accent),#c9812c);
+    display:flex;align-items:center;justify-content:center;font-size:17px;flex:none;box-shadow:0 2px 6px rgba(0,0,0,.35);
+  }
+  .brand-text h1{font-size:21px;font-weight:700;margin:0;color:var(--text);line-height:1.1;}
+  .brand-text h1 .accent{color:var(--accent);}
+  .brand-text p{margin:1px 0 0;font-size:11.5px;color:var(--text-dim);}
   .header-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
   .export-opt{display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text-dim);white-space:nowrap;}
   .export-opt input{accent-color:var(--accent);}
@@ -49,10 +55,32 @@
     padding:8px 13px;border-radius:8px;font-size:12.5px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;
   }
   .icon-btn:hover{background:#20261f;}
+  .icon-btn.round{padding:8px 10px;}
 
-  /* ---------- Preset / scenario bar ---------- */
-  .presetbar{display:flex;align-items:flex-end;gap:18px;flex-wrap:wrap;padding:10px 22px 12px;background:var(--panel);border-bottom:1px solid var(--border);}
-  .cluster{display:flex;flex-direction:column;gap:5px;}
+  /* ---------- Quickbar (mode + lecture) ---------- */
+  .quickbar{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;padding:9px 16px;background:var(--panel);border-bottom:1px solid var(--border);}
+  .qb-group{display:flex;gap:3px;background:var(--panel-2);border:1px solid var(--border);border-radius:999px;padding:4px;}
+  .qb-sep{width:1px;height:24px;background:var(--border);align-self:center;}
+  .quickbar .mode-btn{
+    border:none;background:transparent;color:var(--text-dim);padding:8px 13px;border-radius:999px;
+    font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;
+  }
+  .quickbar .mode-btn:hover{color:var(--text);background:#242c25;}
+  .quickbar .mode-btn.active{background:var(--team);color:#fff;}
+  .quickbar .play-main{padding:8px 16px;border-radius:999px;font-size:12.5px;}
+  .quickbar .play-secondary{padding:8px 12px;border-radius:999px;font-size:12.5px;}
+  @media (max-width:820px){ .quickbar .qb-label{display:none;} .quickbar .mode-btn{padding:9px 10px;} }
+
+  /* ---------- Tabs ---------- */
+  .tabstrip{display:flex;gap:2px;background:var(--panel-2);border:1px solid var(--border);border-radius:10px;padding:3px;margin-bottom:16px;}
+  .tab-btn{flex:1;border:none;background:transparent;color:var(--text-dim);padding:8px 6px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;letter-spacing:.02em;}
+  .tab-btn:hover{color:var(--text);}
+  .tab-btn.active{background:var(--accent);color:#171100;}
+  .tabpanel{display:block;}
+  .tabpanel[hidden]{display:none;}
+
+  /* ---------- Legacy clusters (réutilisés dans l'onglet Terrain) ---------- */
+  .cluster{display:flex;flex-direction:column;gap:5px;margin-bottom:16px;}
   .cluster-label{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--text-dim);font-weight:700;padding-left:3px;}
   .pill-group{display:flex;gap:6px;flex-wrap:wrap;}
   .pill{
@@ -63,19 +91,19 @@
   .pill.active{background:var(--text);color:#0a0e0d;border-color:var(--text);}
   .pill.danger{border-color:var(--danger);color:var(--danger);background:transparent;}
   .pill.danger:hover{background:rgba(226,87,76,.12);}
-  .seg{display:flex;background:var(--panel-2);border:1px solid var(--border);border-radius:999px;padding:3px;gap:2px;}
+  .seg{display:flex;background:var(--panel-3);border:1px solid var(--border);border-radius:999px;padding:3px;gap:2px;}
   .seg button{
     border:none;background:transparent;color:var(--text-dim);padding:6px 13px;border-radius:999px;
     font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap;
   }
   .seg button.active{background:var(--accent);color:#171100;}
   .seg button:hover:not(.active){color:var(--text);background:#20261f;}
-  .sep{width:1px;align-self:stretch;background:var(--border);margin:0 2px;}
+  .sep-h{height:1px;background:var(--border);margin:2px 0 14px;}
 
   /* ---------- Layout ---------- */
   .body{display:flex;flex:1;min-height:0;}
-  .side{width:230px;flex:0 0 230px;background:var(--panel);border-right:1px solid var(--border);padding:16px;overflow-y:auto;}
-  .side.right{border-right:none;border-left:1px solid var(--border);width:300px;flex-basis:300px;}
+  .side{width:250px;flex:0 0 250px;background:var(--panel);border-right:1px solid var(--border);padding:16px;overflow-y:auto;}
+  .side.right{border-right:none;border-left:1px solid var(--border);width:310px;flex-basis:310px;}
   .stage{flex:1;display:flex;align-items:center;justify-content:center;padding:18px;position:relative;min-width:0;}
 
   .block{margin-bottom:20px;}
@@ -98,8 +126,6 @@
   }
   .full-btn:hover{background:#20261f;}
   .mode-btn.active{background:var(--team);border-color:var(--team);color:#fff;}
-  .mode-btn small{color:var(--text-dim);font-weight:400;margin-left:auto;}
-  .mode-btn.active small{color:#dceaff;}
 
   .speed-row{display:flex;gap:6px;}
   .speed-btn{flex:1;border:1px solid var(--border);background:var(--panel-2);border-radius:8px;padding:7px 4px;font-size:11px;font-weight:700;cursor:pointer;color:var(--text-dim);}
@@ -118,13 +144,14 @@
   .token text{font-family:'Barlow Condensed',sans-serif;font-weight:700;pointer-events:none;user-select:none;}
   .token.selected circle.body{stroke:var(--accent) !important;stroke-width:1.4;filter:drop-shadow(0 0 3px rgba(242,169,59,.8));}
   .token.in-draft circle.body{stroke:#fff !important;stroke-width:1.3;filter:drop-shadow(0 0 3px rgba(255,255,255,.85));}
+  .token.ghost{pointer-events:none;}
   .run-hit{cursor:pointer;}
   .run-hit.picked{filter:drop-shadow(0 0 3px rgba(242,169,59,.9));}
   .bendhandle{cursor:grab;opacity:.001;}
   .bendhandle:hover, .run-wrap:hover .bendhandle{opacity:.9;}
 
   /* ---------- Bottom bar ---------- */
-  .bottombar{display:flex;justify-content:space-between;align-items:center;padding:10px 22px;background:var(--panel);border-top:1px solid var(--border);font-size:12px;color:var(--text-dim);}
+  .bottombar{display:flex;justify-content:space-between;align-items:center;padding:9px 20px;background:var(--panel);border-top:1px solid var(--border);font-size:12px;color:var(--text-dim);}
   #statusText{font-style:italic;}
 
   /* ---------- Right sidebar: run editor ---------- */
@@ -169,14 +196,13 @@
   .chrono-wrap{position:relative;margin-bottom:10px;}
   .empty-steps{font-size:12px;color:var(--text-dim);line-height:1.6;padding:6px 2px;}
 
-  /* ---------- Playback ---------- */
-  .playrow{display:flex;gap:8px;margin-bottom:6px;}
+  /* ---------- Playback (styles réutilisés dans la quickbar) ---------- */
   .play-main{
-    flex:1;border:none;background:var(--accent);color:#171100;font-weight:700;border-radius:8px;padding:9px;cursor:pointer;font-size:13px;
+    border:none;background:var(--accent);color:#171100;font-weight:700;border-radius:8px;padding:9px 14px;cursor:pointer;font-size:13px;
     display:flex;align-items:center;justify-content:center;gap:6px;
   }
   .play-main:hover{background:#ffbf5c;}
-  .play-secondary{border:1px solid var(--border);background:var(--panel-2);color:var(--text);border-radius:8px;padding:9px 12px;cursor:pointer;font-size:13px;}
+  .play-secondary{border:none;background:transparent;color:var(--text);border-radius:8px;padding:9px 12px;cursor:pointer;font-size:13px;}
   .play-secondary:hover{background:#20261f;}
 
   /* ---------- Enregistrer ---------- */
@@ -189,6 +215,21 @@
   .saved-item button:hover{color:var(--accent);}
   .saved-item button.del:hover{color:var(--danger);}
   .save-note{font-size:11px;color:var(--text-dim);font-style:italic;margin-top:4px;}
+
+  /* ---------- Raccourcis clavier ---------- */
+  .shortcuts-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:50;align-items:center;justify-content:center;padding:20px;}
+  .shortcuts-overlay.show{display:flex;}
+  .shortcuts-card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:20px;max-width:440px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,.5);}
+  .shortcuts-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+  .shortcuts-head h3{margin:0;font-size:19px;}
+  .shortcuts-head button{border:none;background:var(--panel-2);color:var(--text);width:30px;height:30px;border-radius:8px;font-size:15px;cursor:pointer;}
+  .shortcuts-grid{display:grid;grid-template-columns:auto 1fr;gap:9px 14px;font-size:13px;align-items:center;}
+  .shortcuts-grid kbd{
+    background:var(--panel-3);border:1px solid var(--border);border-bottom-width:2px;border-radius:5px;
+    padding:2px 7px;font-family:'Inter';font-size:11.5px;font-weight:600;color:var(--text);white-space:nowrap;
+  }
+  .shortcuts-grid > div:nth-child(odd){white-space:nowrap;}
+  .shortcuts-grid > div:nth-child(even){color:var(--text-dim);}
 
   @media (max-width:980px){
     .side{display:none;}
@@ -214,59 +255,36 @@
 
   <div class="header">
     <div class="brand">
-      <h1>Ardoise <span class="accent">tactique</span></h1>
-      <p id="subtitle">Positionnement, circuits de passes &amp; chronologie des déplacements</p>
+      <div class="mark">⚽</div>
+      <div class="brand-text">
+        <h1>Ardoise <span class="accent">tactique</span></h1>
+        <p id="subtitle">Limoges Football — passes, déplacements &amp; chronologie</p>
+      </div>
     </div>
     <div class="header-actions">
-      <button class="icon-btn" id="btnMenuLeft" style="display:none;">☰ Effectifs</button>
+      <button class="icon-btn" id="btnMenuLeft" style="display:none;">☰ Réglages</button>
+      <button class="icon-btn round" id="btnShortcuts" title="Raccourcis clavier (?)">⌨</button>
       <label class="export-opt"><input type="checkbox" id="chkHideAnnotations">Sans flèches/annotations</label>
       <button class="icon-btn" id="btnExport">⬇ Image PNG</button>
-      <button class="icon-btn" id="btnExportVideo">🎬 Exporter en vidéo</button>
+      <button class="icon-btn" id="btnExportVideo">🎬 Vidéo</button>
       <button class="icon-btn" id="btnMenuRight" style="display:none;">Chronologie ☰</button>
     </div>
   </div>
 
-  <div class="presetbar">
-    <div class="cluster">
-      <div class="cluster-label">Terrain</div>
-      <div class="seg" id="fieldSeg">
-        <button class="active" data-field="full">Terrain entier</button>
-        <button data-field="box">Surface à surface</button>
-        <button data-field="half">Demi-terrain</button>
-      </div>
+  <div class="quickbar">
+    <div class="qb-group">
+      <button class="mode-btn active" data-mode="position" title="Positionner (V)"><span>🖐</span><span class="qb-label">Positionner</span></button>
+      <button class="mode-btn" data-mode="pass" title="Tracer une passe (P)"><span>⚽</span><span class="qb-label">Passe</span></button>
+      <button class="mode-btn" data-mode="move" title="Tracer un déplacement (D)"><span>➜</span><span class="qb-label">Déplacement</span></button>
+      <button class="mode-btn" data-mode="link" title="Lier / créer une zone (L)"><span>🔗</span><span class="qb-label">Lier</span></button>
+      <button class="mode-btn" data-mode="shape-rect" title="Rectangle (R)"><span>▭</span><span class="qb-label">Rectangle</span></button>
+      <button class="mode-btn" data-mode="shape-ellipse" title="Cercle / ellipse (C)"><span>◯</span><span class="qb-label">Ellipse</span></button>
     </div>
-
-    <div class="cluster">
-      <div class="cluster-label">Orientation</div>
-      <div class="seg" id="orientSeg">
-        <button class="active" data-orient="h">⇔ Horizontal</button>
-        <button data-orient="v">⇕ Vertical</button>
-      </div>
-    </div>
-
-    <div class="cluster" id="goalCluster" style="display:none;">
-      <div class="cluster-label">Zone</div>
-      <div class="seg" id="goalSeg">
-        <button class="active" data-goal="right">But droit</button>
-        <button data-goal="left">But gauche</button>
-      </div>
-    </div>
-
-    <div class="sep"></div>
-
-    <div class="cluster">
-      <div class="cluster-label">Coup de pied arrêté</div>
-      <div class="pill-group" id="presetSeg">
-        <button class="pill" data-preset="corner-g">Corner (gauche)</button>
-        <button class="pill" data-preset="corner-d">Corner (droite)</button>
-        <button class="pill" data-preset="cf-central">Coup franc central</button>
-        <button class="pill" data-preset="cf-excentre">Coup franc excentré</button>
-      </div>
-    </div>
-
-    <div class="cluster">
-      <div class="cluster-label">Chronologie</div>
-      <button class="pill danger" id="btnViderTerrain">Vider le terrain</button>
+    <div class="qb-sep"></div>
+    <div class="qb-group">
+      <button class="play-secondary" id="btnRestart" title="Revenir au départ (Origine)">⏮</button>
+      <button class="play-main" id="btnPlayPause" title="Lecture / Pause (Espace)">▶ Lecture</button>
+      <button class="play-secondary" id="btnEnd" title="Aller à la fin (Fin)">⏭</button>
     </div>
   </div>
 
@@ -274,62 +292,97 @@
 
     <!-- LEFT SIDEBAR -->
     <div class="side left" id="sideLeft">
-      <div class="mobile-panel-head"><span>Effectifs &amp; édition</span><button id="btnCloseLeft">✕</button></div>
+      <div class="mobile-panel-head"><span>Réglages</span><button id="btnCloseLeft">✕</button></div>
 
-      <div class="block">
-        <h3>Effectifs</h3>
-        <div class="count-row">
-          <div class="label"><span class="dot team"></span>Mon équipe</div>
-          <div class="stepper">
-            <button data-adjust="team" data-dir="-1">−</button>
-            <div class="val" id="teamCountVal">11</div>
-            <button data-adjust="team" data-dir="1">+</button>
+      <div class="tabstrip">
+        <button class="tab-btn active" data-tab="tabTerrain">Terrain</button>
+        <button class="tab-btn" data-tab="tabEquipe">Équipe</button>
+        <button class="tab-btn" data-tab="tabReglages">Réglages</button>
+      </div>
+
+      <div class="tabpanel" id="tabTerrain">
+        <div class="cluster">
+          <div class="cluster-label">Vue</div>
+          <div class="seg" id="fieldSeg">
+            <button class="active" data-field="full">Terrain entier</button>
+            <button data-field="box">Surface à surface</button>
+            <button data-field="half">Demi-terrain</button>
           </div>
         </div>
-        <div class="count-row">
-          <div class="label"><span class="dot opp"></span>Adversaires</div>
-          <div class="stepper">
-            <button data-adjust="opp" data-dir="-1">−</button>
-            <div class="val" id="oppCountVal">0</div>
-            <button data-adjust="opp" data-dir="1">+</button>
+        <div class="cluster">
+          <div class="cluster-label">Orientation</div>
+          <div class="seg" id="orientSeg">
+            <button class="active" data-orient="h">⇔ Horizontal</button>
+            <button data-orient="v">⇕ Vertical</button>
           </div>
         </div>
-        <div style="font-size:11px;color:var(--text-dim);margin:4px 0 8px;display:flex;align-items:center;gap:5px;"><span class="dot gk"></span>Le 1ᵉʳ joueur de chaque équipe est le gardien</div>
-        <button class="full-btn" id="btnResetPositions">↺ Réinitialiser les positions</button>
-      </div>
-
-      <div class="block">
-        <h3>Composition — Mon équipe</h3>
-        <div class="seg" id="compoFormatSeg" style="margin-bottom:8px;">
-          <button data-fmt="8">Foot à 8</button>
-          <button class="active" data-fmt="10">Foot à 10</button>
-          <button data-fmt="11">Foot à 11</button>
+        <div class="cluster" id="goalCluster" style="display:none;">
+          <div class="cluster-label">Zone</div>
+          <div class="seg" id="goalSeg">
+            <button class="active" data-goal="right">But droit</button>
+            <button data-goal="left">But gauche</button>
+          </div>
         </div>
-        <div class="pill-group" id="compoSystemSeg"></div>
+        <div class="sep-h"></div>
+        <div class="cluster">
+          <div class="cluster-label">Coup de pied arrêté</div>
+          <div class="pill-group" id="presetSeg">
+            <button class="pill" data-preset="corner-g">Corner (gauche)</button>
+            <button class="pill" data-preset="corner-d">Corner (droite)</button>
+            <button class="pill" data-preset="cf-central">Coup franc central</button>
+            <button class="pill" data-preset="cf-excentre">Coup franc excentré</button>
+          </div>
+        </div>
+        <button class="pill danger" id="btnViderTerrain" style="width:100%;">Vider le terrain (courses)</button>
       </div>
 
-      <div class="block">
-        <h3>Mode d'édition</h3>
-        <button class="full-btn mode-btn active" data-mode="position">🖐 Positionner <small>glisser</small></button>
-        <button class="full-btn mode-btn" data-mode="pass">⚽ Tracer une passe <small>2 clics</small></button>
-        <button class="full-btn mode-btn" data-mode="move">➜ Tracer un déplacement <small>2 clics</small></button>
-      </div>
-
-      <div class="block" id="speedBlock" style="display:none;">
-        <h3>Durée par défaut (passe ou déplacement)</h3>
-        <div class="speed-row">
-          <button class="speed-btn" data-s="lent">LENT · 3.5s</button>
-          <button class="speed-btn active" data-s="normal">NORMAL · 2.5s</button>
-          <button class="speed-btn" data-s="rapide">RAPIDE · 1.2s</button>
+      <div class="tabpanel" id="tabEquipe" hidden>
+        <div class="block">
+          <h3>Effectifs</h3>
+          <div class="count-row">
+            <div class="label"><span class="dot team"></span>Mon équipe</div>
+            <div class="stepper">
+              <button data-adjust="team" data-dir="-1">−</button>
+              <div class="val" id="teamCountVal">11</div>
+              <button data-adjust="team" data-dir="1">+</button>
+            </div>
+          </div>
+          <div class="count-row">
+            <div class="label"><span class="dot opp"></span>Adversaires</div>
+            <div class="stepper">
+              <button data-adjust="opp" data-dir="-1">−</button>
+              <div class="val" id="oppCountVal">0</div>
+              <button data-adjust="opp" data-dir="1">+</button>
+            </div>
+          </div>
+          <div style="font-size:11px;color:var(--text-dim);margin:4px 0 8px;display:flex;align-items:center;gap:5px;"><span class="dot gk"></span>Le 1ᵉʳ joueur de chaque équipe est le gardien</div>
+          <button class="full-btn" id="btnResetPositions">↺ Réinitialiser les positions</button>
+        </div>
+        <div class="block">
+          <h3>Composition — Mon équipe</h3>
+          <div class="seg" id="compoFormatSeg" style="margin-bottom:8px;">
+            <button data-fmt="8">Foot à 8</button>
+            <button class="active" data-fmt="10">Foot à 10</button>
+            <button data-fmt="11">Foot à 11</button>
+          </div>
+          <div class="pill-group" id="compoSystemSeg"></div>
         </div>
       </div>
 
-      <div class="block">
-        <h3>Annotations</h3>
-        <button class="full-btn mode-btn" data-mode="link">🔗 Lier / créer une zone <small>clics</small></button>
-        <button class="full-btn mode-btn" data-mode="shape-rect">▭ Rectangle <small>glisser</small></button>
-        <button class="full-btn mode-btn" data-mode="shape-ellipse">◯ Cercle / ellipse <small>glisser</small></button>
-        <div id="linkDraftPanel"></div>
+      <div class="tabpanel" id="tabReglages" hidden>
+        <div class="block" id="speedBlock">
+          <h3>Durée par défaut (passe ou déplacement)</h3>
+          <div class="speed-row">
+            <button class="speed-btn" data-s="lent">LENT · 3.5s</button>
+            <button class="speed-btn active" data-s="normal">NORMAL · 2.5s</button>
+            <button class="speed-btn" data-s="rapide">RAPIDE · 1.2s</button>
+          </div>
+        </div>
+        <div class="block">
+          <h3>Liaison en cours</h3>
+          <div id="linkDraftPanel"></div>
+          <div class="hint">Passez en mode « Lier » (barre du haut) puis cliquez sur 2 joueurs ou plus pour voir apparaître les options ici.</div>
+        </div>
       </div>
     </div>
 
@@ -351,6 +404,7 @@
         <div class="legend">
           <div class="item"><svg viewBox="0 0 26 12"><path d="M1,9 Q13,-3 22,6" stroke="var(--pass)" stroke-width="0.6" stroke-dasharray="0.6,1.6" stroke-linecap="round" fill="none"></path></svg>Circuit de passe (pointillés)</div>
           <div class="item"><svg viewBox="0 0 26 12"><path d="M1,9 Q13,-3 22,6" stroke="var(--team)" stroke-width="0.6" stroke-dasharray="0.6,1.6" stroke-linecap="round" fill="none"></path></svg>Déplacement joueur (couleur d'équipe)</div>
+          <div class="item"><svg viewBox="0 0 26 12"><circle cx="11" cy="6" r="5" fill="var(--team)" fill-opacity="0.4" stroke="var(--team)" stroke-opacity="0.8" stroke-dasharray="1,1"></circle><circle cx="15.5" cy="1.8" r="2.6" fill="var(--accent)"></circle><text x="15.5" y="2.9" text-anchor="middle" font-size="3.4" font-weight="700" fill="#412402">1</text></svg>Fantôme numéroté = chaque étape du trajet</div>
           <div class="item"><span class="dot gk" style="width:11px;height:11px;"></span>Gardien</div>
         </div>
       </div>
@@ -358,34 +412,27 @@
 
     <!-- RIGHT SIDEBAR -->
     <div class="side right" id="sideRight">
-      <div class="mobile-panel-head"><span>Chronologie &amp; animation</span><button id="btnCloseRight">✕</button></div>
+      <div class="mobile-panel-head"><span>Chronologie</span><button id="btnCloseRight">✕</button></div>
 
       <div id="linkEditorHost"></div>
       <div id="shapeEditorHost"></div>
       <div id="runEditorHost"></div>
 
-      <div class="block">
-        <h3>Chronologie</h3>
+      <div class="tabstrip">
+        <button class="tab-btn active" data-tab="tabChrono">Chronologie</button>
+        <button class="tab-btn" data-tab="tabEnregistrer">Enregistrer</button>
+      </div>
+
+      <div class="tabpanel" id="tabChrono">
         <div id="chronoHost"></div>
       </div>
 
-      <div class="block">
-        <h3>Animation</h3>
-        <div class="playrow">
-          <button class="play-secondary" id="btnRestart" title="Revenir au départ">⏮</button>
-          <button class="play-main" id="btnPlayPause">▶ Lecture</button>
-          <button class="play-secondary" id="btnEnd" title="Aller à la fin">⏭</button>
-        </div>
-      </div>
-
-      <div class="block">
-        <h3>Enregistrer</h3>
+      <div class="tabpanel" id="tabEnregistrer" hidden>
         <input type="text" id="schemaName" placeholder="Nom du schéma (ex. Sortie n°1)">
         <button class="save-btn" id="btnSaveSchema">💾 Enregistrer ce schéma</button>
         <div id="savedList"></div>
         <div class="save-note">Les schémas sont enregistrés dans ce navigateur (localStorage), propres à cet appareil.</div>
       </div>
-
     </div>
 
   </div>
@@ -397,9 +444,30 @@
 
   <div class="mobile-backdrop" id="mobileBackdrop"></div>
 
+  <div class="shortcuts-overlay" id="shortcutsOverlay">
+    <div class="shortcuts-card">
+      <div class="shortcuts-head"><h3>Raccourcis clavier</h3><button id="btnCloseShortcuts">✕</button></div>
+      <div class="shortcuts-grid">
+        <div><kbd>V</kbd> <kbd>Échap</kbd></div><div>Positionner</div>
+        <div><kbd>P</kbd></div><div>Tracer une passe</div>
+        <div><kbd>D</kbd></div><div>Tracer un déplacement</div>
+        <div><kbd>L</kbd></div><div>Lier / créer une zone</div>
+        <div><kbd>R</kbd></div><div>Rectangle</div>
+        <div><kbd>C</kbd></div><div>Cercle / ellipse</div>
+        <div><kbd>Espace</kbd></div><div>Lecture / Pause</div>
+        <div><kbd>Origine</kbd></div><div>Revenir au départ</div>
+        <div><kbd>Fin</kbd></div><div>Aller à la fin de la séquence</div>
+        <div><kbd>Suppr</kbd></div><div>Supprimer la course / forme sélectionnée</div>
+        <div><kbd>Ctrl</kbd> <kbd>S</kbd></div><div>Enregistrer le schéma</div>
+        <div><kbd>?</kbd></div><div>Afficher / masquer cette aide</div>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <script>
+
 (function(){
   "use strict";
 
@@ -670,23 +738,52 @@
   // ---------------- Rendu jetons ----------------
   function renderTokens(){
     gTokens.innerHTML='';
+    var showGhosts=isEditRestState();
+    var idxInfo = showGhosts ? runIndexInfo() : null;
     state.players.forEach(function(p){
       var col=tokenColor(p);
       gTokens.appendChild(makeTokenEl(p.id,p.x,p.y,col.fill,col.stroke,String(p.num),1.7,false));
+      if(showGhosts){
+        var runs=runsForActor(p.id);
+        runs.forEach(function(r){
+          var info=idxInfo[r.id];
+          var num = info ? info.index : 1;
+          var gEl=makeTokenEl(p.id+'-ghost-'+r.id, r.to.x, r.to.y, col.fill, col.stroke, String(p.num), 1.7, false, true);
+          gEl.appendChild(makeGhostBadge(1.7, num));
+          gTokens.appendChild(gEl);
+        });
+      }
     });
     gTokens.appendChild(makeTokenEl('ball', state.ball.x, state.ball.y, '#fff', '#333', '', 0.75, true));
     renderLinks();
     bindTokenEvents();
   }
-  function makeTokenEl(id,x,y,fill,stroke,label,r,isBall){
+  function makeGhostBadge(r,num){
     var g=ns('g');
-    var cls='token'+(state.selection===id?' selected':'')+((state.mode==='link' && state.linkDraft.indexOf(id)!==-1)?' in-draft':'');
+    var bx=r*0.74, by=-r*0.74, br=r*0.56;
+    var c=ns('circle');
+    c.setAttribute('cx',bx); c.setAttribute('cy',by); c.setAttribute('r',br);
+    c.setAttribute('fill','var(--accent)'); c.setAttribute('stroke','#171100'); c.setAttribute('stroke-width','0.2');
+    g.appendChild(c);
+    var t=ns('text');
+    t.setAttribute('x',bx); t.setAttribute('y',by+br*0.36); t.setAttribute('text-anchor','middle');
+    t.setAttribute('font-size', br*1.35); t.setAttribute('font-family',"'Barlow Condensed'"); t.setAttribute('font-weight','700');
+    t.setAttribute('fill','#412402');
+    t.textContent=String(num);
+    g.appendChild(t);
+    return g;
+  }
+  function makeTokenEl(id,x,y,fill,stroke,label,r,isBall,isGhost){
+    var g=ns('g');
+    var cls='token'+(state.selection===id?' selected':'')+((state.mode==='link' && state.linkDraft.indexOf(id)!==-1)?' in-draft':'')+(isGhost?' ghost':'');
     g.setAttribute('class',cls);
     g.setAttribute('data-id',id);
     g.setAttribute('transform','translate('+x+','+y+')');
+    if(isGhost) g.setAttribute('opacity','0.4');
     var c=ns('circle');
     c.setAttribute('class','body');
-    c.setAttribute('r',r); c.setAttribute('fill',fill); c.setAttribute('stroke',stroke); c.setAttribute('stroke-width','0.5');
+    c.setAttribute('r',r); c.setAttribute('fill',fill); c.setAttribute('stroke',stroke); c.setAttribute('stroke-width', isGhost?'0.35':'0.5');
+    if(isGhost) c.setAttribute('stroke-dasharray','0.5,0.4');
     g.appendChild(c);
     if(!isBall){
       var t=ns('text');
@@ -713,6 +810,15 @@
   }
   function runsForActor(id){
     return state.runs.filter(function(r){ return r.actorId===id; }).sort(function(a,b){ return a.start-b.start; });
+  }
+  function restingPos(id){
+    var runs=runsForActor(id);
+    if(runs.length) return {x:runs[runs.length-1].to.x, y:runs[runs.length-1].to.y};
+    var p=getPlayer(id);
+    return {x:p.x, y:p.y};
+  }
+  function isEditRestState(){
+    return !state.playing && state.playTime===0;
   }
   function actorLabel(id){
     if(id==='ball') return 'Ballon';
@@ -1417,7 +1523,8 @@
   function findPlayerNear(x,y,tol){
     var best=null, bestD=tol;
     state.players.forEach(function(p){
-      var d=Math.hypot(p.x-x,p.y-y);
+      var rp=restingPos(p.id);
+      var d=Math.hypot(rp.x-x,rp.y-y);
       if(d<bestD){ bestD=d; best=p.id; }
     });
     return best;
@@ -1432,11 +1539,10 @@
     if(state.mode==='pass' || state.mode==='move'){
       if(!state.selection || state.selection===id){
         if(isValidSourceToken(state.mode,id)){
-          var actorObj=getPlayer(id);
           drag.traj = {
             kind: state.mode,
             actorId: id,
-            fromPoint: {x:actorObj.x, y:actorObj.y}
+            fromPoint: restingPos(id)
           };
         }
       } else {
@@ -1488,6 +1594,14 @@
     p.setAttribute('stroke-dasharray','1.6,1.2');
     gGuides.appendChild(p);
   }
+  function drawGhostAt(x,y,color){
+    var c=ns('circle');
+    c.setAttribute('cx',x); c.setAttribute('cy',y); c.setAttribute('r','1.7');
+    c.setAttribute('fill',color); c.setAttribute('fill-opacity','0.4');
+    c.setAttribute('stroke',color); c.setAttribute('stroke-opacity','0.8'); c.setAttribute('stroke-width','0.35');
+    c.setAttribute('stroke-dasharray','0.5,0.4');
+    gGuides.appendChild(c);
+  }
   function onPointerMoveToken(e){
     if(!drag) return;
     var t = e.touches && e.touches[0] ? e.touches[0] : e;
@@ -1497,20 +1611,26 @@
     var p=screenToLogical(e);
 
     if(drag.traj){
-      var actorObj=getPlayer(drag.traj.actorId);
       var x=clamp(p.x,-9,PL+9), y=clamp(p.y,-7,PW+7);
       var snap=applySnap(drag.traj.actorId,x,y);
       if(snap.x!==null) x=snap.x;
       if(snap.y!==null) y=snap.y;
-      if(actorObj){ actorObj.x=x; actorObj.y=y; }
+      drag.traj.lastPoint={x:x,y:y};
       drawGuides(snap);
       drawTrajPreview(drag.traj.fromPoint, {x:x,y:y}, drag.traj.kind);
-      renderTokens();
+      if(drag.traj.kind==='pass'){
+        var actorObj=getPlayer(drag.traj.actorId);
+        if(actorObj){ actorObj.x=x; actorObj.y=y; }
+        renderTokens();
+      } else {
+        var col=tokenColor(getPlayer(drag.traj.actorId));
+        drawGhostAt(x,y,col.fill);
+      }
       return;
     }
     if(drag.destFinalize){
-      var src=getPlayer(drag.destFinalize.sourceId);
-      if(src){ drawTrajPreview({x:src.x,y:src.y}, {x:p.x,y:p.y}, drag.destFinalize.mode); }
+      var srcPos=restingPos(drag.destFinalize.sourceId);
+      drawTrajPreview(srcPos, {x:p.x,y:p.y}, drag.destFinalize.mode);
       return;
     }
     if(state.mode==='position'){
@@ -1536,8 +1656,7 @@
 
     if(traj){
       if(moved){
-        var actorObj=getPlayer(traj.actorId);
-        var finalPt={x:actorObj.x, y:actorObj.y};
+        var finalPt = traj.kind==='pass' ? (function(){ var a=getPlayer(traj.actorId); return {x:a.x,y:a.y}; })() : (traj.lastPoint||traj.fromPoint);
         if(traj.kind==='pass'){
           addRun('pass','ball', traj.fromPoint, finalPt, {receiverId:findPlayerNear(finalPt.x,finalPt.y,2.5)});
         } else {
@@ -1553,17 +1672,14 @@
 
     if(destFin){
       var p=screenToLogical(e);
-      var src=getPlayer(destFin.sourceId);
-      if(src){
-        if(destFin.mode==='pass'){
-          var to={x:p.x,y:p.y};
-          addRun('pass','ball', {x:src.x,y:src.y}, to, {receiverId: id!=='ball' ? id : null});
-          state.ball.x=to.x; state.ball.y=to.y;
-        } else {
-          var to2={x:clamp(p.x,-9,PL+9), y:clamp(p.y,-7,PW+7)};
-          addRun('move', destFin.sourceId, {x:src.x,y:src.y}, to2);
-          src.x=to2.x; src.y=to2.y;
-        }
+      var srcPos=restingPos(destFin.sourceId);
+      if(destFin.mode==='pass'){
+        var to={x:p.x,y:p.y};
+        addRun('pass','ball', srcPos, to, {receiverId: id!=='ball' ? id : null});
+        state.ball.x=to.x; state.ball.y=to.y;
+      } else {
+        var to2={x:clamp(p.x,-9,PL+9), y:clamp(p.y,-7,PW+7)};
+        addRun('move', destFin.sourceId, srcPos, to2);
       }
       state.selection=null;
       renderTokens();
@@ -1584,17 +1700,14 @@
     if(state.mode!=='pass' && state.mode!=='move') return;
     var p=screenToLogical(e);
     if(state.mode==='pass'){
-      var from=getPlayer(state.selection);
-      if(!from) return;
+      var fromPos=restingPos(state.selection);
       var to={x:p.x,y:p.y};
-      addRun('pass','ball', {x:from.x,y:from.y}, to, {receiverId:findPlayerNear(to.x,to.y,2.5)});
+      addRun('pass','ball', fromPos, to, {receiverId:findPlayerNear(to.x,to.y,2.5)});
       state.ball.x=to.x; state.ball.y=to.y;
     } else {
-      var actor=getPlayer(state.selection);
-      if(!actor) return;
+      var actorPos=restingPos(state.selection);
       var to2={x:clamp(p.x,-9,PL+9), y:clamp(p.y,-7,PW+7)};
-      addRun('move', state.selection, {x:actor.x,y:actor.y}, to2);
-      actor.x=to2.x; actor.y=to2.y;
+      addRun('move', state.selection, actorPos, to2);
     }
     state.selection=null;
     renderTokens();
@@ -1849,11 +1962,10 @@
       state.mode=btn.getAttribute('data-mode');
       state.selection=null;
       if(state.mode!=='link') state.linkDraft=[];
-      document.getElementById('speedBlock').style.display = (state.mode==='move'||state.mode==='pass') ? 'block':'none';
       var hint=document.getElementById('hintText');
       if(state.mode==='position') hint.textContent='Glissez un joueur ou le ballon sur le terrain pour le positionner.';
       else if(state.mode==='pass') hint.textContent="Cliquez sur le ballon puis à l'endroit où il doit arriver — ou glissez le ballon directement. Chaque nouvelle passe s'enchaîne automatiquement après la précédente.";
-      else if(state.mode==='move') hint.textContent="Cliquez sur un joueur puis à l'endroit où il doit se déplacer — ou glissez-le directement. Le déplacement démarre automatiquement à la fin du dernier déplacement du ballon.";
+      else if(state.mode==='move') hint.textContent="Cliquez sur un joueur puis à l'endroit où il doit se déplacer — ou glissez-le directement. Le joueur reste à sa position ; un pion transparent indique son arrivée. Démarre automatiquement à la fin du dernier déplacement du ballon.";
       else if(state.mode==='link') hint.textContent='Cliquez sur au moins 2 joueurs (ou le ballon) pour les relier par un trait ; 3 ou plus pour fermer une zone remplie.';
       else if(state.mode==='shape-rect') hint.textContent='Cliquez-glissez sur le terrain pour dessiner un rectangle.';
       else if(state.mode==='shape-ellipse') hint.textContent='Cliquez-glissez pour dessiner un cercle, puis utilisez les poignées orange pour le déformer en ellipse.';
@@ -2079,6 +2191,79 @@
   }
   window.addEventListener('resize', checkMobileButtons);
   checkMobileButtons();
+
+  // ---------------- Onglets ----------------
+  function setupTabs(container){
+    var tabs=container.querySelectorAll('.tab-btn');
+    var panels=container.querySelectorAll('.tabpanel');
+    tabs.forEach(function(btn){
+      btn.addEventListener('click', function(){
+        tabs.forEach(function(b){ b.classList.remove('active'); });
+        panels.forEach(function(p){ p.hidden=true; });
+        btn.classList.add('active');
+        var target=document.getElementById(btn.getAttribute('data-tab'));
+        if(target) target.hidden=false;
+      });
+    });
+  }
+  document.querySelectorAll('.tabstrip').forEach(function(strip){ setupTabs(strip.closest('.side')); });
+
+  function openRightTab(tabId){
+    var strip=document.querySelector('#sideRight .tabstrip');
+    if(!strip) return;
+    var btn=strip.querySelector('.tab-btn[data-tab="'+tabId+'"]');
+    if(btn) btn.click();
+  }
+
+  // ---------------- Raccourcis clavier ----------------
+  function clickMode(mode){
+    var btn=document.querySelector('.mode-btn[data-mode="'+mode+'"]');
+    if(btn) btn.click();
+  }
+  function deleteSelected(){
+    if(state.pickedRun){ deleteRun(state.pickedRun); }
+    else if(state.selectedShape){ deleteShape(state.selectedShape); }
+    else if(state.selectedLink){ deleteLink(state.selectedLink); }
+  }
+  function toggleShortcuts(){
+    document.getElementById('shortcutsOverlay').classList.toggle('show');
+  }
+  document.getElementById('btnShortcuts').addEventListener('click', toggleShortcuts);
+  document.getElementById('shortcutsOverlay').addEventListener('click', function(e){
+    if(e.target.id==='shortcutsOverlay') toggleShortcuts();
+  });
+  document.getElementById('btnCloseShortcuts').addEventListener('click', toggleShortcuts);
+
+  document.addEventListener('keydown', function(e){
+    var tag=(document.activeElement && document.activeElement.tagName || '').toLowerCase();
+    var typing = tag==='input' || tag==='select' || tag==='textarea';
+    var overlayOpen=document.getElementById('shortcutsOverlay').classList.contains('show');
+
+    if(e.key==='?' && !typing){ e.preventDefault(); toggleShortcuts(); return; }
+    if(overlayOpen){ if(e.key==='Escape') toggleShortcuts(); return; }
+    if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='s'){
+      e.preventDefault();
+      var nameInput=document.getElementById('schemaName');
+      if(nameInput.value.trim()){ document.getElementById('btnSaveSchema').click(); }
+      else { openRightTab('tabEnregistrer'); if(window.innerWidth<=980) openSide('right'); nameInput.focus(); }
+      return;
+    }
+    if(typing){ if(e.key==='Escape') document.activeElement.blur(); return; }
+
+    switch(e.key.toLowerCase()){
+      case 'v': clickMode('position'); break;
+      case 'escape': clickMode('position'); break;
+      case 'p': clickMode('pass'); break;
+      case 'd': clickMode('move'); break;
+      case 'l': clickMode('link'); break;
+      case 'r': clickMode('shape-rect'); break;
+      case 'c': clickMode('shape-ellipse'); break;
+      case 'home': goToStart(); break;
+      case 'end': goToEnd(); break;
+      case 'delete': case 'backspace': deleteSelected(); e.preventDefault(); break;
+      case ' ': e.preventDefault(); togglePlay(); break;
+    }
+  });
 
   // ---------------- Init ----------------
   drawBackground();
