@@ -276,7 +276,10 @@
     <div class="header-actions">
       <button class="icon-btn" id="btnMenuLeft" style="display:none;">☰ Réglages</button>
       <button class="icon-btn round" id="btnShortcuts" title="Raccourcis clavier (?)">⌨</button>
-      <label class="export-opt"><input type="checkbox" id="chkHideAnnotations">Sans flèches/annotations</label>
+      <span class="export-opt" style="font-weight:700;">À l'export :</span>
+      <label class="export-opt"><input type="checkbox" id="chkExportArrows" checked>Flèches</label>
+      <label class="export-opt"><input type="checkbox" id="chkExportShapes" checked>Formes</label>
+      <label class="export-opt"><input type="checkbox" id="chkExportLinks" checked>Zones/liaisons</label>
       <button class="icon-btn" id="btnExport">⬇ Image PNG</button>
       <button class="icon-btn" id="btnExportVideo">🎬 Vidéo</button>
       <button class="icon-btn" id="btnMenuRight" style="display:none;">Chronologie ☰</button>
@@ -828,6 +831,13 @@
     renderLinks();
     bindTokenEvents();
   }
+  function uprightWrap(bx,by){
+    var g=ns('g');
+    g.setAttribute('transform', state.orientation==='v'
+      ? 'translate('+bx+','+by+') matrix(0,1,1,0,0,0)'
+      : 'translate('+bx+','+by+')');
+    return g;
+  }
   function makeGhostBadge(r,num){
     var g=ns('g');
     var bx=r*0.76, by=-r*0.76, br=r*0.68;
@@ -835,12 +845,14 @@
     c.setAttribute('cx',bx); c.setAttribute('cy',by); c.setAttribute('r',br);
     c.setAttribute('fill','var(--accent)'); c.setAttribute('stroke','#171100'); c.setAttribute('stroke-width','0.2');
     g.appendChild(c);
+    var wrap=uprightWrap(bx,by);
     var t=ns('text');
-    t.setAttribute('x',bx); t.setAttribute('y',by+br*0.36); t.setAttribute('text-anchor','middle');
+    t.setAttribute('x',0); t.setAttribute('y',br*0.36); t.setAttribute('text-anchor','middle');
     t.setAttribute('font-size', br*1.35); t.setAttribute('font-family',"'Barlow Condensed'"); t.setAttribute('font-weight','700');
     t.setAttribute('fill','#412402');
     t.textContent=String(num);
-    g.appendChild(t);
+    wrap.appendChild(t);
+    g.appendChild(wrap);
     return g;
   }
   function makeTokenEl(id,x,y,fill,stroke,label,r,isBall,isGhost,isParked){
@@ -857,11 +869,13 @@
     if(isParked){ c.setAttribute('stroke','var(--accent)'); c.setAttribute('stroke-dasharray','0.6,0.5'); c.setAttribute('stroke-width','0.4'); }
     g.appendChild(c);
     if(!isBall){
+      var wrap=uprightWrap(0,1);
       var t=ns('text');
-      t.setAttribute('x',0); t.setAttribute('y',1); t.setAttribute('text-anchor','middle');
+      t.setAttribute('x',0); t.setAttribute('y',0); t.setAttribute('text-anchor','middle');
       t.setAttribute('font-size', r*1.15); t.setAttribute('fill','#0a0e0d');
       t.textContent=label;
-      g.appendChild(t);
+      wrap.appendChild(t);
+      g.appendChild(wrap);
     }
     return g;
   }
@@ -2182,17 +2196,17 @@
     var b=e.target.closest('button'); if(!b) return;
     state.fieldView=b.getAttribute('data-field');
     document.getElementById('goalCluster').style.display = state.fieldView==='half' ? 'flex':'none';
-    syncUiFromState(); applyViewBox();
+    syncUiFromState(); applyViewBox(); renderTokens();
   });
   document.getElementById('orientSeg').addEventListener('click', function(e){
     var b=e.target.closest('button'); if(!b) return;
     state.orientation=b.getAttribute('data-orient');
-    syncUiFromState(); applyViewBox();
+    syncUiFromState(); applyViewBox(); renderTokens();
   });
   document.getElementById('goalSeg').addEventListener('click', function(e){
     var b=e.target.closest('button'); if(!b) return;
     state.goalSide=b.getAttribute('data-goal');
-    syncUiFromState(); applyViewBox();
+    syncUiFromState(); applyViewBox(); renderTokens();
   });
 
   document.querySelectorAll('.mode-btn').forEach(function(btn){
@@ -2307,20 +2321,28 @@
     return {w:w,h:h};
   }
 
-  function withAnnotationsHidden(hide, fn){
+  function withAnnotationsHidden(opts, fn){
     var prevArrows=gArrows.style.display, prevShapes=gShapes.style.display, prevLinks=gLinks.style.display;
-    if(hide){ gArrows.style.display='none'; gShapes.style.display='none'; gLinks.style.display='none'; }
+    if(!opts.arrows) gArrows.style.display='none';
+    if(!opts.shapes) gShapes.style.display='none';
+    if(!opts.links) gLinks.style.display='none';
     try{ fn(); } finally {
-      if(hide){ gArrows.style.display=prevArrows; gShapes.style.display=prevShapes; gLinks.style.display=prevLinks; }
+      gArrows.style.display=prevArrows; gShapes.style.display=prevShapes; gLinks.style.display=prevLinks;
     }
+  }
+  function getExportAnnotOpts(){
+    return {
+      arrows: document.getElementById('chkExportArrows').checked,
+      shapes: document.getElementById('chkExportShapes').checked,
+      links: document.getElementById('chkExportLinks').checked
+    };
   }
 
   document.getElementById('btnExport').addEventListener('click', function(){
     var pngBtn=document.getElementById('btnExport');
     var pngOrig=pngBtn.innerHTML;
     pngBtn.innerHTML='⏳ Export…';
-    var hide=document.getElementById('chkHideAnnotations').checked;
-    withAnnotationsHidden(hide, function(){
+    withAnnotationsHidden(getExportAnnotOpts(), function(){
       var xml=serializeSvgWithStyles();
       var size=computeExportCanvasSize(1600);
       var svg64=btoa(unescape(encodeURIComponent(xml)));
@@ -2361,9 +2383,11 @@
     var originalActiveTemps=state.activeTempsId;
     state.livePos=null;
 
-    var hideAnnot=document.getElementById('chkHideAnnotations').checked;
+    var annotOpts=getExportAnnotOpts();
     var prevArrows=gArrows.style.display, prevShapes=gShapes.style.display, prevLinks=gLinks.style.display;
-    if(hideAnnot){ gArrows.style.display='none'; gShapes.style.display='none'; gLinks.style.display='none'; }
+    if(!annotOpts.arrows) gArrows.style.display='none';
+    if(!annotOpts.shapes) gShapes.style.display='none';
+    if(!annotOpts.links) gLinks.style.display='none';
 
     var preRoll=0.5, postRoll=0.7, gap=0.35;
     var tempsDurations=state.temps.map(function(t){ return Math.max(0.5, maxEndForTemps(t.id))+gap; });
@@ -2401,7 +2425,7 @@
       state.playTime=originalPlayTime;
       state.livePos=originalLivePos;
       state.activeTempsId=originalActiveTemps;
-      if(hideAnnot){ gArrows.style.display=prevArrows; gShapes.style.display=prevShapes; gLinks.style.display=prevLinks; }
+      gArrows.style.display=prevArrows; gShapes.style.display=prevShapes; gLinks.style.display=prevLinks;
       render();
       btn.disabled=false;
       btn.innerHTML=vidBtnOrig;
