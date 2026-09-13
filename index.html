@@ -196,6 +196,17 @@
   .chrono-playhead{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--accent);pointer-events:none;}
   .chrono-wrap{position:relative;margin-bottom:10px;}
   .empty-steps{font-size:12px;color:var(--text-dim);line-height:1.6;padding:6px 2px;}
+  .temps-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:4px;}
+  .temps-pill{
+    display:flex;align-items:center;gap:6px;border:1px solid var(--border);background:var(--panel-2);color:var(--text-dim);
+    padding:6px 10px;border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;
+  }
+  .temps-pill:hover{color:var(--text);}
+  .temps-pill.active{background:var(--accent);border-color:var(--accent);color:#171100;}
+  .temps-pill .tp-del{border:none;background:none;color:inherit;opacity:.6;cursor:pointer;font-size:11px;padding:0;line-height:1;}
+  .temps-pill .tp-del:hover{opacity:1;}
+  .temps-add{border:1px dashed var(--border);background:transparent;color:var(--text-dim);padding:6px 12px;border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;}
+  .temps-add:hover{color:var(--text);border-color:var(--accent);}
 
   /* ---------- Playback (styles réutilisés dans la quickbar) ---------- */
   .play-main{
@@ -368,6 +379,15 @@
           </div>
           <div class="pill-group" id="compoSystemSeg"></div>
         </div>
+        <div class="block">
+          <h3>Composition — Adversaires</h3>
+          <div class="seg" id="compoFormatSegOpp" style="margin-bottom:8px;">
+            <button data-fmt="8">Foot à 8</button>
+            <button class="active" data-fmt="10">Foot à 10</button>
+            <button data-fmt="11">Foot à 11</button>
+          </div>
+          <div class="pill-group" id="compoSystemSegOpp"></div>
+        </div>
       </div>
 
       <div class="tabpanel" id="tabReglages" hidden>
@@ -425,6 +445,10 @@
       </div>
 
       <div class="tabpanel" id="tabChrono">
+        <div class="block">
+          <h3>Temps</h3>
+          <div id="tempsHost"></div>
+        </div>
         <div id="chronoHost"></div>
       </div>
 
@@ -502,7 +526,11 @@
     linkDraft:[],
     selectedShape:null,
     selectedLink:null,
-    shapeDraft:null
+    shapeDraft:null,
+    temps:[{id:'temps1', name:'Temps 1'}],
+    activeTempsId:'temps1',
+    livePos:null,
+    playTempsIdx:0
   };
   var DUR = {lent:3.5, normal:2.5, rapide:1.2};
   var uidCounter=1;
@@ -647,7 +675,9 @@
     }
     state.ball={x:52.5,y:34};
     state.compoSystem=null;
+    state.oppCompoSystem=null;
     if(document.getElementById('compoSystemSeg')) renderCompoSystems();
+    if(document.getElementById('compoSystemSegOpp')) renderOppCompoSystems();
     render();
   }
   function setSideCount(side, newCount){
@@ -664,6 +694,7 @@
     }
     state.players = others.concat(existing);
     if(side==='team'){ state.compoSystem=null; if(document.getElementById('compoSystemSeg')) renderCompoSystems(); }
+    else { state.oppCompoSystem=null; if(document.getElementById('compoSystemSegOpp')) renderOppCompoSystems(); }
     render();
   }
   function getPlayer(id){
@@ -683,6 +714,7 @@
     11: ['1-4-4-2','1-4-3-3','1-3-5-2','1-4-2-3-1']
   };
   state.compoFormat='10'; state.compoSystem=null;
+  state.oppCompoFormat='10'; state.oppCompoSystem=null;
 
   function lineMargin(n){ if(n<=2) return 22; if(n===3) return 13; return 6; }
   function spreadLine(n,x,post){
@@ -693,34 +725,38 @@
     for(var k=0;k<n;k++) arr.push({x:x, y:m+(68-2*m)*(k/(n-1)), post:post});
     return arr;
   }
-  function formationPositions(groups){
-    var pts=[{x:6,y:34,post:'gk'}];
+  function formationPositions(groups, side){
+    var mirror = side==='opp';
+    var pts=[{x:mirror?PL-6:6, y:34, post:'gk'}];
     var lines=groups.slice(1);
     var nLines=lines.length;
     var xs=[];
     if(nLines===1) xs=[35];
     else for(var i=0;i<nLines;i++) xs.push(18 + (64-18)*(i/(nLines-1)));
+    if(mirror) xs = xs.map(function(x){ return PL-x; });
     lines.forEach(function(n,li){
       var post = li===0 ? 'def' : (li===nLines-1 ? 'att' : 'mid');
       pts=pts.concat(spreadLine(n, xs[li], post));
     });
     return pts;
   }
-  function applyFormation(formationStr){
-    if(state.runs.length>0 && !confirm('Charger cette composition réinitialisera les positions de votre équipe et effacera les courses en cours. Continuer ?')) return;
+  function applyFormation(formationStr, side){
+    side = side || 'team';
+    var label = side==='team' ? 'votre équipe' : 'l\'équipe adverse';
+    if(state.runs.length>0 && !confirm('Charger cette composition réinitialisera les positions de '+label+' et effacera les courses en cours. Continuer ?')) return;
     var groups=formationStr.split('-').map(Number);
     var count=groups.reduce(function(a,b){return a+b;},0);
-    var pts=formationPositions(groups);
-    state.teamCount=count;
-    document.getElementById('teamCountVal').textContent=count;
-    state.players=state.players.filter(function(p){return p.side!=='team';});
+    var pts=formationPositions(groups, side);
+    if(side==='team'){ state.teamCount=count; document.getElementById('teamCountVal').textContent=count; }
+    else { state.oppCount=count; document.getElementById('oppCountVal').textContent=count; }
+    state.players=state.players.filter(function(p){return p.side!==side;});
     for(var i=0;i<count;i++){
-      state.players.push({id:'team'+(i+1), side:'team', num:(i+1), x:pts[i].x, y:pts[i].y, isGK:(i===0), post:pts[i].post});
+      state.players.push({id:side+(i+1), side:side, num:(i+1), x:pts[i].x, y:pts[i].y, isGK:(i===0), post:pts[i].post});
     }
     clearRuns();
-    state.compoSystem=formationStr;
+    if(side==='team'){ state.compoSystem=formationStr; renderCompoSystems(); }
+    else { state.oppCompoSystem=formationStr; renderOppCompoSystems(); }
     state.fieldView='full'; state.orientation='h';
-    renderCompoSystems();
     syncUiFromState();
     render();
   }
@@ -731,7 +767,18 @@
       var b=document.createElement('button');
       b.className='pill'+(state.compoSystem===f?' active':'');
       b.textContent=f;
-      b.addEventListener('click', function(){ applyFormation(f); });
+      b.addEventListener('click', function(){ applyFormation(f,'team'); });
+      host.appendChild(b);
+    });
+  }
+  function renderOppCompoSystems(){
+    var host=document.getElementById('compoSystemSegOpp');
+    host.innerHTML='';
+    FORMATIONS[state.oppCompoFormat].forEach(function(f){
+      var b=document.createElement('button');
+      b.className='pill'+(state.oppCompoSystem===f?' active':'');
+      b.textContent=f;
+      b.addEventListener('click', function(){ applyFormation(f,'opp'); });
       host.appendChild(b);
     });
   }
@@ -739,13 +786,17 @@
   // ---------------- Rendu jetons ----------------
   function renderTokens(){
     gTokens.innerHTML='';
-    var showGhosts=isEditRestState();
-    var idxInfo = showGhosts ? runIndexInfo() : null;
+    var live=state.livePos;
+    var idxInfo = !live ? runIndexInfo(state.activeTempsId) : null;
     state.players.forEach(function(p){
       var col=tokenColor(p);
-      gTokens.appendChild(makeTokenEl(p.id,p.x,p.y,col.fill,col.stroke,String(p.num),1.7,false));
-      if(showGhosts){
-        var runs=runsForActor(p.id);
+      if(live){
+        var lp=live.players[p.id]||{x:p.x,y:p.y};
+        gTokens.appendChild(makeTokenEl(p.id,lp.x,lp.y,col.fill,col.stroke,String(p.num),1.7,false));
+      } else {
+        var basePos = state.mode==='position' ? {x:p.x,y:p.y} : basePosForTemps(p.id, state.activeTempsId);
+        gTokens.appendChild(makeTokenEl(p.id,basePos.x,basePos.y,col.fill,col.stroke,String(p.num),1.7,false));
+        var runs=runsForActorInTemps(p.id, state.activeTempsId);
         runs.forEach(function(r){
           var info=idxInfo[r.id];
           var num = info ? info.index : 1;
@@ -755,7 +806,8 @@
         });
       }
     });
-    gTokens.appendChild(makeTokenEl('ball', state.ball.x, state.ball.y, '#fff', '#333', '', 0.75, true));
+    var ballPos = live ? (live.ball||{x:state.ball.x,y:state.ball.y}) : basePosForTemps('ball', state.activeTempsId);
+    gTokens.appendChild(makeTokenEl('ball', ballPos.x, ballPos.y, '#fff', '#333', '', 0.75, true));
     renderLinks();
     bindTokenEvents();
   }
@@ -809,17 +861,38 @@
     var sign = (Math.round(from.x+from.y)%2===0)?1:-1;
     return {x:mx+nx*bend*sign, y:my+ny*bend*sign};
   }
-  function runsForActor(id){
-    return state.runs.filter(function(r){ return r.actorId===id; }).sort(function(a,b){ return a.start-b.start; });
+  function tempsIndexOf(tempsId){
+    for(var i=0;i<state.temps.length;i++) if(state.temps[i].id===tempsId) return i;
+    return -1;
   }
-  function restingPos(id){
-    var runs=runsForActor(id);
+  function runOrderKey(r){ return tempsIndexOf(r.tempsId)*100000 + r.start; }
+  function runsForActor(id){
+    return state.runs.filter(function(r){ return r.actorId===id; }).sort(function(a,b){ return runOrderKey(a)-runOrderKey(b); });
+  }
+  function runsForActorInTemps(id,tempsId){
+    return state.runs.filter(function(r){ return r.actorId===id && r.tempsId===tempsId; }).sort(function(a,b){ return a.start-b.start; });
+  }
+  function chainedPositionUpTo(id, tempsIdxExclusive){
+    var runs=runsForActor(id).filter(function(r){ return tempsIndexOf(r.tempsId) < tempsIdxExclusive; });
     if(runs.length) return {x:runs[runs.length-1].to.x, y:runs[runs.length-1].to.y};
     var p=getPlayer(id);
     return {x:p.x, y:p.y};
   }
-  function isEditRestState(){
-    return !state.playing && state.playTime===0;
+  function restingPos(id){
+    return chainedPositionUpTo(id, Infinity);
+  }
+  function basePosForTemps(id, tempsId){
+    return chainedPositionUpTo(id, tempsIndexOf(tempsId));
+  }
+  function maxEndForTemps(tempsId){
+    var m=0;
+    state.runs.forEach(function(r){ if(r.tempsId===tempsId) m=Math.max(m, r.start+r.duration); });
+    return m;
+  }
+  function maxEndForActorInTemps(actorId, tempsId){
+    var m=0;
+    state.runs.forEach(function(r){ if(r.actorId===actorId && r.tempsId===tempsId) m=Math.max(m, r.start+r.duration); });
+    return m;
   }
   function actorLabel(id){
     if(id==='ball') return 'Ballon';
@@ -865,9 +938,10 @@
     var c=runColor(run);
     return CSS_HEX[c] || c;
   }
-  function runIndexInfo(){
+  function runIndexInfo(tempsId){
     var groups={};
-    state.runs.slice().sort(function(a,b){return a.start-b.start;}).forEach(function(r){
+    state.runs.filter(function(r){ return !tempsId || r.tempsId===tempsId; })
+      .slice().sort(function(a,b){return a.start-b.start;}).forEach(function(r){
       (groups[r.actorId]=groups[r.actorId]||[]).push(r);
     });
     var map={};
@@ -882,9 +956,9 @@
   function addRun(kind, actorId, from, to, meta){
     var chainId = (kind==='move') ? 'ball' : actorId;
     var run = {
-      id: uid('r'), kind:kind, actorId:actorId,
+      id: uid('r'), kind:kind, actorId:actorId, tempsId: state.activeTempsId,
       from:{x:from.x,y:from.y}, to:{x:to.x,y:to.y},
-      start: Math.max(0, maxEndForActor(chainId)),
+      start: Math.max(0, maxEndForActorInTemps(chainId, state.activeTempsId)),
       duration: DUR[state.quickDuration],
       color:null,
       strokeStyle: 'dotted',
@@ -898,11 +972,6 @@
     state.pickedRun=run.id;
     renderAll();
   }
-  function maxEndForActor(id){
-    var m=0;
-    state.runs.forEach(function(r){ if(r.actorId===id) m=Math.max(m, r.start+r.duration); });
-    return m;
-  }
   function deleteRun(id){
     state.runs = state.runs.filter(function(r){return r.id!==id;});
     if(state.pickedRun===id) state.pickedRun=null;
@@ -910,13 +979,8 @@
   }
   function clearRuns(){
     state.runs=[]; state.pickedRun=null; state.selection=null;
-    stopPlayback(); state.playTime=0;
+    stopPlayback(); state.playTime=0; state.livePos=null; state.playTempsIdx=0;
     renderAll();
-  }
-  function maxEnd(){
-    var m=10;
-    state.runs.forEach(function(r){ m=Math.max(m, r.start+r.duration+0.3); });
-    return m;
   }
 
   // ---------------- Rendu flèches ----------------
@@ -1255,7 +1319,7 @@
     }
 
     var maxOthers=0;
-    state.runs.forEach(function(r){ if(r.id!==run.id) maxOthers=Math.max(maxOthers, r.start+r.duration); });
+    state.runs.forEach(function(r){ if(r.id!==run.id && r.tempsId===run.tempsId) maxOthers=Math.max(maxOthers, r.start+r.duration); });
     var startMax=Math.max(10, maxOthers+10);
     box.appendChild(sliderRow('Départ', run.start, 0, startMax, 0.1, 's', function(v){ run.start=v; renderChrono(); }));
     box.appendChild(sliderRow('Durée de la course', run.duration, 0.2, 8, 0.1, 's', function(v){ run.duration=v; renderChrono(); }));
@@ -1303,23 +1367,83 @@
     return row;
   }
 
+  // ---------------- Temps (phases) ----------------
+  function renderTempsNav(){
+    var host=document.getElementById('tempsHost');
+    host.innerHTML='';
+    var row=document.createElement('div'); row.className='temps-row';
+    state.temps.forEach(function(t){
+      var pill=document.createElement('div');
+      pill.className='temps-pill'+(t.id===state.activeTempsId?' active':'');
+      var label=document.createElement('span');
+      label.textContent=t.name;
+      pill.appendChild(label);
+      pill.addEventListener('click', function(){ selectTemps(t.id); });
+      pill.addEventListener('dblclick', function(e){ e.stopPropagation(); renameTemps(t.id); });
+      if(state.temps.length>1){
+        var del=document.createElement('button'); del.className='tp-del'; del.textContent='×'; del.title='Supprimer ce temps';
+        del.addEventListener('click', function(e){ e.stopPropagation(); deleteTemps(t.id); });
+        pill.appendChild(del);
+      }
+      row.appendChild(pill);
+    });
+    var add=document.createElement('button'); add.className='temps-add'; add.textContent='+ Temps';
+    add.addEventListener('click', addTemps);
+    row.appendChild(add);
+    host.appendChild(row);
+    var hint=document.createElement('div'); hint.className='hint';
+    hint.style.marginTop='6px';
+    hint.textContent='Double-cliquez un temps pour le renommer. Les mouvements créés s\'ajoutent au temps sélectionné.';
+    host.appendChild(hint);
+  }
+  function addTemps(){
+    var n=state.temps.length+1;
+    var t={id:uid('temps'), name:'Temps '+n};
+    state.temps.push(t);
+    selectTemps(t.id);
+  }
+  function selectTemps(tempsId){
+    stopPlayback();
+    state.livePos=null;
+    state.activeTempsId=tempsId;
+    state.pickedRun=null;
+    renderAll();
+  }
+  function renameTemps(tempsId){
+    var t=state.temps.find(function(x){return x.id===tempsId;});
+    if(!t) return;
+    var name=prompt('Nom du temps :', t.name);
+    if(name && name.trim()){ t.name=name.trim(); renderTempsNav(); renderChrono(); }
+  }
+  function deleteTemps(tempsId){
+    if(state.temps.length<=1) return;
+    var hasRuns=state.runs.some(function(r){return r.tempsId===tempsId;});
+    if(hasRuns && !confirm('Ce temps contient des courses. Le supprimer effacera aussi ces courses. Continuer ?')) return;
+    state.runs=state.runs.filter(function(r){ return r.tempsId!==tempsId; });
+    state.temps=state.temps.filter(function(t){ return t.id!==tempsId; });
+    if(state.activeTempsId===tempsId){ state.activeTempsId=state.temps[0].id; }
+    renderAll();
+  }
+
   // ---------------- Chronologie (Gantt) ----------------
   function renderChrono(){
+    renderTempsNav();
     var host=document.getElementById('chronoHost');
     host.innerHTML='';
-    if(state.runs.length===0){
-      host.innerHTML='<div class="empty-steps">Aucune course tracée. Utilisez « Tracer une passe » ou « Tracer un déplacement » puis cliquez sur le terrain. Chaque joueur peut recevoir plusieurs courses successives.</div>';
+    var tempsRuns=state.runs.filter(function(r){ return r.tempsId===state.activeTempsId; });
+    if(tempsRuns.length===0){
+      host.innerHTML='<div class="empty-steps">Aucune course dans ce temps. Utilisez « Tracer une passe » ou « Tracer un déplacement » puis cliquez sur le terrain.</div>';
       return;
     }
-    var m=maxEnd();
-    var idxInfo=runIndexInfo();
+    var m=Math.max(6, maxEndForTemps(state.activeTempsId)+0.3);
+    var idxInfo=runIndexInfo(state.activeTempsId);
     var ruler=document.createElement('div'); ruler.className='chrono-ruler';
     var ticks=Math.min(10, Math.ceil(m));
     for(var t=0;t<=ticks;t++){ var sp=document.createElement('span'); sp.textContent=Math.round(m*t/ticks)+'s'; ruler.appendChild(sp); }
     host.appendChild(ruler);
 
     var wrap=document.createElement('div'); wrap.className='chrono-wrap';
-    var sorted=state.runs.slice().sort(function(a,b){ return a.start-b.start; });
+    var sorted=tempsRuns.slice().sort(function(a,b){ return a.start-b.start; });
     sorted.forEach(function(run){
       var row=document.createElement('div'); row.className='chrono-row'+(state.pickedRun===run.id?' picked':'');
       var lab=document.createElement('div'); lab.className='chrono-label';
@@ -1344,7 +1468,7 @@
     });
     host.appendChild(wrap);
 
-    if(state.playTime>0){
+    if(state.livePos && state.temps[state.playTempsIdx] && state.temps[state.playTempsIdx].id===state.activeTempsId){
       wrap.querySelectorAll('.chrono-track').forEach(function(tr){
         var ph=document.createElement('div'); ph.className='chrono-playhead';
         ph.style.left=(state.playTime/m*100)+'%';
@@ -1359,7 +1483,7 @@
     bar.addEventListener('pointerdown', function(e){
       e.stopPropagation();
       var t=e.touches&&e.touches[0]?e.touches[0]:e;
-      var m0=maxEnd();
+      var m0=Math.max(6, maxEndForTemps(run.tempsId)+0.3);
       var trackRect=track.getBoundingClientRect();
       st={startClientX:t.clientX, startStart:run.start, m:m0, trackWidth:trackRect.width, moved:false};
       window.addEventListener('pointermove', onBarMove);
@@ -1375,7 +1499,7 @@
       var newStart = Math.max(0, st.startStart+deltaTime);
       var snapTime=null;
       state.runs.forEach(function(r){
-        if(r.id===run.id) return;
+        if(r.id===run.id || r.tempsId!==run.tempsId) return;
         [r.start, r.start+r.duration].forEach(function(tm){
           if(snapTime===null && Math.abs(tm-newStart)<0.12) snapTime=tm;
         });
@@ -1523,7 +1647,7 @@
     return false;
   }
   function findNextRun(run){
-    var runs=runsForActor(run.actorId);
+    var runs=runsForActorInTemps(run.actorId, run.tempsId);
     var idx=runs.findIndex(function(r){ return r.id===run.id; });
     if(idx===-1 || idx===runs.length-1) return null;
     return runs[idx+1];
@@ -1534,7 +1658,8 @@
       if(!run) return null;
       return {kind:run.kind, actorId:run.actorId, fromPoint:{x:run.to.x,y:run.to.y}, editRun:findNextRun(run), anchorRun:run};
     }
-    return {kind:mode, actorId:id, fromPoint:restingPos(id), editRun:null, anchorRun:null};
+    var fromPoint=chainedPositionUpTo(id, tempsIndexOf(state.activeTempsId)+1);
+    return {kind:mode, actorId:id, fromPoint:fromPoint, editRun:null, anchorRun:null};
   }
   function cascadeUpdateFrom(run, oldTo, newTo){
     var next=findNextRun(run);
@@ -1546,8 +1671,9 @@
   }
   function findPlayerNear(x,y,tol){
     var best=null, bestD=tol;
+    var idxExcl=tempsIndexOf(state.activeTempsId)+1;
     state.players.forEach(function(p){
-      var rp=restingPos(p.id);
+      var rp=chainedPositionUpTo(p.id, idxExcl);
       var d=Math.hypot(rp.x-x,rp.y-y);
       if(d<bestD){ bestD=d; best=p.id; }
     });
@@ -1605,30 +1731,27 @@
       gGuides.appendChild(h);
     }
   }
-  function findEquidistantPairs(excludeId,x,y,tol){
-    var pairs=[];
+  function findEquidistantGroup(excludeId,x,y,tol){
+    var best=null;
     ['team','opp'].forEach(function(side){
       var pts=state.players.filter(function(p){ return p.side===side && p.id!==excludeId; });
+      pts.forEach(function(p){ p._d=Math.hypot(p.x-x,p.y-y); });
+      pts=pts.filter(function(p){ return p._d>1.5; });
+      pts.sort(function(a,b){ return a._d-b._d; });
+      pts=pts.slice(0,4);
       for(var i=0;i<pts.length;i++){
-        for(var j=i+1;j<pts.length;j++){
-          var dA=Math.hypot(pts[i].x-x,pts[i].y-y);
-          var dB=Math.hypot(pts[j].x-x,pts[j].y-y);
-          if(dA>1.5 && dB>1.5 && Math.abs(dA-dB)<tol){
-            pairs.push({a:pts[i], b:pts[j]});
-          }
-        }
+        var group=pts.filter(function(p){ return Math.abs(p._d-pts[i]._d)<tol; });
+        if(group.length>=2 && (!best || group.length>best.length)) best=group;
       }
     });
-    return pairs.slice(0,2);
+    return best ? best.slice(0,3) : [];
   }
-  function drawEquidistanceGuides(x,y,pairs){
-    pairs.forEach(function(pr){
-      [pr.a,pr.b].forEach(function(pt){
-        var l=ns('line');
-        l.setAttribute('x1',x); l.setAttribute('y1',y); l.setAttribute('x2',pt.x); l.setAttribute('y2',pt.y);
-        l.setAttribute('stroke','var(--accent)'); l.setAttribute('stroke-width','0.3'); l.setAttribute('stroke-dasharray','1,1'); l.setAttribute('stroke-linecap','round');
-        gGuides.appendChild(l);
-      });
+  function drawEquidistanceGuides(x,y,points){
+    points.forEach(function(pt){
+      var l=ns('line');
+      l.setAttribute('x1',x); l.setAttribute('y1',y); l.setAttribute('x2',pt.x); l.setAttribute('y2',pt.y);
+      l.setAttribute('stroke','var(--accent)'); l.setAttribute('stroke-width','0.3'); l.setAttribute('stroke-dasharray','1,1'); l.setAttribute('stroke-linecap','round');
+      gGuides.appendChild(l);
     });
   }
   function drawTrajPreview(from,to,kind){
@@ -1663,7 +1786,7 @@
       if(snap.y!==null) y=snap.y;
       drag.traj.lastPoint={x:x,y:y};
       drawGuides(snap);
-      var eqPairsT=findEquidistantPairs(drag.traj.actorId,x,y,0.6);
+      var eqPairsT=findEquidistantGroup(drag.traj.actorId,x,y,0.6);
       if(eqPairsT.length) drawEquidistanceGuides(x,y,eqPairsT);
       drawTrajPreview(drag.traj.fromPoint, {x:x,y:y}, drag.traj.kind);
       if(drag.traj.kind==='pass'){
@@ -1689,7 +1812,7 @@
         if(snap2.y!==null) y2=snap2.y;
         obj.x=x2; obj.y=y2;
         drawGuides(snap2);
-        var eqPairs=findEquidistantPairs(drag.id,x2,y2,0.6);
+        var eqPairs=findEquidistantGroup(drag.id,x2,y2,0.6);
         if(eqPairs.length) drawEquidistanceGuides(x2,y2,eqPairs);
         renderTokens();
       }
@@ -1783,16 +1906,23 @@
   // ---------------- Lecture ----------------
   function goToStart(){
     stopPlayback();
+    state.livePos=null;
+    state.playTempsIdx=0;
     state.playTime=0;
-    applyPlaybackPositions(0);
-    renderChrono();
+    state.activeTempsId=state.temps[0].id;
+    renderAll();
   }
   function goToEnd(){
     stopPlayback();
-    var m=maxEnd();
-    state.playTime=m;
-    applyPlaybackPositions(m);
-    renderChrono();
+    var lastIdx=state.temps.length-1;
+    state.playTempsIdx=lastIdx;
+    state.playTime=maxEndForTemps(state.temps[lastIdx].id);
+    state.activeTempsId=state.temps[lastIdx].id;
+    var live={players:{}, ball:null};
+    state.players.forEach(function(p){ live.players[p.id]=restingPos(p.id); });
+    live.ball=restingPos('ball');
+    state.livePos=live;
+    renderAll();
   }
   function positionAtTime(runs, t, fallback){
     if(runs.length===0) return fallback;
@@ -1811,16 +1941,25 @@
     }
     return fallback;
   }
-  function applyPlaybackPositions(t){
+  function computeLivePositions(tempsId, t){
+    var live={players:{}, ball:null};
     state.players.forEach(function(p){
-      var runs=runsForActor(p.id);
-      var pos=positionAtTime(runs, t, {x:p.x,y:p.y});
-      p.x=pos.x; p.y=pos.y;
+      var runs=runsForActorInTemps(p.id, tempsId);
+      if(runs.length===0){
+        live.players[p.id] = state.livePos ? (state.livePos.players[p.id]||{x:p.x,y:p.y}) : basePosForTemps(p.id, tempsId);
+      } else {
+        var carryIn = state.livePos ? (state.livePos.players[p.id]||{x:p.x,y:p.y}) : basePosForTemps(p.id, tempsId);
+        live.players[p.id]=positionAtTime(runs, t, carryIn);
+      }
     });
-    var brunAll=runsForActor('ball');
-    var bpos=positionAtTime(brunAll, t, {x:state.ball.x,y:state.ball.y});
-    state.ball.x=bpos.x; state.ball.y=bpos.y;
-    renderTokens();
+    var brun=runsForActorInTemps('ball', tempsId);
+    if(brun.length===0){
+      live.ball = state.livePos ? (state.livePos.ball||{x:state.ball.x,y:state.ball.y}) : basePosForTemps('ball', tempsId);
+    } else {
+      var carryInB = state.livePos ? (state.livePos.ball||{x:state.ball.x,y:state.ball.y}) : basePosForTemps('ball', tempsId);
+      live.ball = positionAtTime(brun, t, carryInB);
+    }
+    return live;
   }
   function stopPlayback(){
     state.playing=false;
@@ -1832,12 +1971,13 @@
   function togglePlay(){
     if(state.playing){ pausePlayback(); return; }
     if(state.runs.length===0) return;
-    var m=maxEnd();
-    if(state.playTime>=m-0.01) state.playTime=0;
+    var lastIdx=state.temps.length-1;
+    var atEnd = state.playTempsIdx>=lastIdx && state.playTime>=maxEndForTemps(state.temps[lastIdx].id)-0.01;
+    if(atEnd || !state.livePos){ state.playTempsIdx=0; state.playTime=0; state.livePos=null; state.activeTempsId=state.temps[0].id; }
     state.playing=true;
     state.lastTs=performance.now();
     document.getElementById('btnPlayPause').innerHTML='⏸ Pause';
-    document.getElementById('statusText').textContent='Animation en cours…';
+    document.getElementById('statusText').textContent='Animation en cours… ('+state.temps[state.playTempsIdx].name+')';
     state.rafId=requestAnimationFrame(loop);
   }
   function pausePlayback(){
@@ -1852,15 +1992,27 @@
     var dt=(now-state.lastTs)/1000;
     state.lastTs=now;
     state.playTime += dt;
-    var m=maxEnd();
+    var temps=state.temps[state.playTempsIdx];
+    var m=maxEndForTemps(temps.id);
     if(state.playTime>=m){
       state.playTime=m;
-      applyPlaybackPositions(state.playTime);
-      renderChrono();
-      stopPlayback();
+      state.livePos=computeLivePositions(temps.id, state.playTime);
+      renderTokens();
+      if(state.playTempsIdx < state.temps.length-1){
+        state.playTempsIdx++;
+        state.playTime=0;
+        state.activeTempsId=state.temps[state.playTempsIdx].id;
+        document.getElementById('statusText').textContent='Animation en cours… ('+state.temps[state.playTempsIdx].name+')';
+        renderChrono();
+        state.rafId=requestAnimationFrame(loop);
+      } else {
+        renderChrono();
+        stopPlayback();
+      }
       return;
     }
-    applyPlaybackPositions(state.playTime);
+    state.livePos=computeLivePositions(temps.id, state.playTime);
+    renderTokens();
     renderChrono();
     state.rafId=requestAnimationFrame(loop);
   }
@@ -1938,7 +2090,8 @@
         fieldView:state.fieldView, goalSide:state.goalSide, orientation:state.orientation,
         teamCount:state.teamCount, oppCount:state.oppCount,
         players:state.players, ball:state.ball, runs:state.runs,
-        shapes:state.shapes, links:state.links
+        shapes:state.shapes, links:state.links,
+        temps:state.temps, activeTempsId:state.activeTempsId
       };
       localStorage.setItem('ardoise-tactique:item:'+name, JSON.stringify(data));
       var idx=getIndex();
@@ -1957,7 +2110,10 @@
       document.getElementById('oppCountVal').textContent=state.oppCount;
       state.players=data.players; state.ball=data.ball; state.runs=data.runs||[];
       state.shapes=data.shapes||[]; state.links=data.links||[];
-      state.pickedRun=null; state.selection=null; state.playTime=0;
+      state.temps = (data.temps && data.temps.length) ? data.temps : [{id:'temps1', name:'Temps 1'}];
+      state.runs.forEach(function(r){ if(!r.tempsId) r.tempsId=state.temps[0].id; });
+      state.activeTempsId = data.activeTempsId && state.temps.some(function(t){return t.id===data.activeTempsId;}) ? data.activeTempsId : state.temps[0].id;
+      state.pickedRun=null; state.selection=null; state.playTime=0; state.livePos=null; state.playTempsIdx=0;
       state.selectedShape=null; state.selectedLink=null; state.linkDraft=[];
       syncUiFromState();
       render();
@@ -1996,6 +2152,14 @@
     state.compoSystem=null;
     renderCompoSystems();
   });
+  document.getElementById('compoFormatSegOpp').addEventListener('click', function(e){
+    var b=e.target.closest('button'); if(!b) return;
+    document.querySelectorAll('#compoFormatSegOpp button').forEach(function(x){x.classList.remove('active');});
+    b.classList.add('active');
+    state.oppCompoFormat=b.getAttribute('data-fmt');
+    state.oppCompoSystem=null;
+    renderOppCompoSystems();
+  });
   document.getElementById('fieldSeg').addEventListener('click', function(e){
     var b=e.target.closest('button'); if(!b) return;
     state.fieldView=b.getAttribute('data-field');
@@ -2020,6 +2184,7 @@
       state.mode=btn.getAttribute('data-mode');
       state.selection=null;
       if(state.mode!=='link') state.linkDraft=[];
+      stopPlayback(); state.livePos=null;
       var hint=document.getElementById('hintText');
       if(state.mode==='position') hint.textContent='Glissez un joueur ou le ballon sur le terrain pour le positionner.';
       else if(state.mode==='pass') hint.textContent="Cliquez sur le ballon puis à l'endroit où il doit arriver — ou glissez le ballon directement. Chaque nouvelle passe s'enchaîne automatiquement après la précédente.";
@@ -2174,13 +2339,17 @@
     var originalPlayers=JSON.parse(JSON.stringify(state.players));
     var originalBall=JSON.parse(JSON.stringify(state.ball));
     var originalPlayTime=state.playTime;
+    var originalLivePos=state.livePos;
+    var originalActiveTemps=state.activeTempsId;
+    state.livePos=null;
 
     var hideAnnot=document.getElementById('chkHideAnnotations').checked;
     var prevArrows=gArrows.style.display, prevShapes=gShapes.style.display, prevLinks=gLinks.style.display;
     if(hideAnnot){ gArrows.style.display='none'; gShapes.style.display='none'; gLinks.style.display='none'; }
 
-    var preRoll=0.5, postRoll=0.7;
-    var animEnd=maxEnd();
+    var preRoll=0.5, postRoll=0.7, gap=0.35;
+    var tempsDurations=state.temps.map(function(t){ return Math.max(0.5, maxEndForTemps(t.id))+gap; });
+    var animEnd=tempsDurations.reduce(function(a,b){return a+b;},0);
     var totalDuration=animEnd+preRoll+postRoll;
 
     var size=computeExportCanvasSize(1280);
@@ -2212,6 +2381,8 @@
       state.players=originalPlayers;
       state.ball=originalBall;
       state.playTime=originalPlayTime;
+      state.livePos=originalLivePos;
+      state.activeTempsId=originalActiveTemps;
       if(hideAnnot){ gArrows.style.display=prevArrows; gShapes.style.display=prevShapes; gLinks.style.display=prevLinks; }
       render();
       btn.disabled=false;
@@ -2232,8 +2403,16 @@
         if(!stopped){ stopped=true; recorder.stop(); }
         return;
       }
-      var t=clamp(elapsedReal-preRoll, 0, animEnd);
-      applyPlaybackPositions(t);
+      var tIntoAnim=clamp(elapsedReal-preRoll, 0, animEnd);
+      var acc=0, tempsIdx=tempsDurations.length-1, localT=0;
+      for(var k=0;k<tempsDurations.length;k++){
+        if(tIntoAnim <= acc+tempsDurations[k]){ tempsIdx=k; localT=Math.min(tIntoAnim-acc, tempsDurations[k]-gap); break; }
+        acc+=tempsDurations[k];
+      }
+      localT=Math.max(0,localT);
+      var tempsId=state.temps[tempsIdx].id;
+      state.livePos=computeLivePositions(tempsId, localT);
+      renderTokens();
       document.getElementById('statusText').textContent='Enregistrement de la vidéo… '+elapsedReal.toFixed(1)+' / '+totalDuration.toFixed(1)+'s';
       btn.innerHTML='⏳ '+Math.round(elapsedReal/totalDuration*100)+'%';
       var svgStr=serializeSvgWithStyles();
