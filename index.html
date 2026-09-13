@@ -784,18 +784,35 @@
   }
 
   // ---------------- Rendu jetons ----------------
+  function isOutOfCrop(pos){
+    if(state.fieldView!=='half') return false;
+    var c=currentCrop();
+    var m=1.5;
+    return pos.x<c.x-m || pos.x>c.x+c.w+m || pos.y<c.y-m || pos.y>c.y+c.h+m;
+  }
+  function railPosition(index){
+    var c=currentCrop();
+    var perRow=Math.max(3, Math.floor((c.w-10)/4.5));
+    var col=index%perRow, row=Math.floor(index/perRow);
+    return {x:c.x+5+col*4.5, y:c.y+3+row*4.5};
+  }
   function renderTokens(){
     gTokens.innerHTML='';
     var live=state.livePos;
     var idxInfo = !live ? runIndexInfo(state.activeTempsId) : null;
+    var railIndex=0;
     state.players.forEach(function(p){
       var col=tokenColor(p);
       if(live){
         var lp=live.players[p.id]||{x:p.x,y:p.y};
-        gTokens.appendChild(makeTokenEl(p.id,lp.x,lp.y,col.fill,col.stroke,String(p.num),1.7,false));
+        var parkedLive=isOutOfCrop(lp);
+        if(parkedLive) lp=railPosition(railIndex++);
+        gTokens.appendChild(makeTokenEl(p.id,lp.x,lp.y,col.fill,col.stroke,String(p.num),1.7,false,false,parkedLive));
       } else {
         var basePos = state.mode==='position' ? {x:p.x,y:p.y} : basePosForTemps(p.id, state.activeTempsId);
-        gTokens.appendChild(makeTokenEl(p.id,basePos.x,basePos.y,col.fill,col.stroke,String(p.num),1.7,false));
+        var parked=isOutOfCrop(basePos);
+        if(parked) basePos=railPosition(railIndex++);
+        gTokens.appendChild(makeTokenEl(p.id,basePos.x,basePos.y,col.fill,col.stroke,String(p.num),1.7,false,false,parked));
         var runs=runsForActorInTemps(p.id, state.activeTempsId);
         runs.forEach(function(r){
           var info=idxInfo[r.id];
@@ -826,7 +843,7 @@
     g.appendChild(t);
     return g;
   }
-  function makeTokenEl(id,x,y,fill,stroke,label,r,isBall,isGhost){
+  function makeTokenEl(id,x,y,fill,stroke,label,r,isBall,isGhost,isParked){
     var g=ns('g');
     var cls='token'+(state.selection===id?' selected':'')+((state.mode==='link' && state.linkDraft.indexOf(id)!==-1)?' in-draft':'')+(isGhost?' ghost':'');
     g.setAttribute('class',cls);
@@ -837,6 +854,7 @@
     c.setAttribute('class','body');
     c.setAttribute('r',r); c.setAttribute('fill',fill); c.setAttribute('stroke',stroke); c.setAttribute('stroke-width', isGhost?'0.35':'0.5');
     if(isGhost) c.setAttribute('stroke-dasharray','0.5,0.4');
+    if(isParked){ c.setAttribute('stroke','var(--accent)'); c.setAttribute('stroke-dasharray','0.6,0.5'); c.setAttribute('stroke-width','0.4'); }
     g.appendChild(c);
     if(!isBall){
       var t=ns('text');
