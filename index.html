@@ -433,11 +433,7 @@
     <div class="stage">
       <div class="pitch-wrap">
         <svg id="pitch" viewBox="-4 -4 113 76" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <marker id="annotArrow" markerWidth="6" markerHeight="6" refX="4.6" refY="3" orient="auto">
-              <path d="M0,0 L6,3 L0,6 Z" fill="context-fill"></path>
-            </marker>
-          </defs>
+          <defs id="dynDefs"></defs>
           <g id="rotspace">
             <g id="bg"></g>
             <g id="markings"></g>
@@ -577,6 +573,7 @@
   var gTokens=document.getElementById('tokens');
   var gGuides=document.getElementById('guides');
   var gLabels=document.getElementById('labels');
+  var dynDefs=document.getElementById('dynDefs');
   var gShapes=document.getElementById('shapes');
   var gLinks=document.getElementById('links');
 
@@ -1168,6 +1165,49 @@
   function trianglePoints(s){
     return (s.x+s.w/2)+','+s.y+' '+s.x+','+(s.y+s.h)+' '+(s.x+s.w)+','+(s.y+s.h);
   }
+  var ARROW_TYPES = {
+    simple: {label:'Simple', head:'filled', body:'single'},
+    sprint: {label:'Sprint (double)', head:'filled', body:'double'},
+    lane:   {label:'Couloir de passe', head:'open', body:'dashed'},
+    block:  {label:'Pressing / bloc', head:'filled', body:'thick'},
+    dribble:{label:'Dribble (ondulé)', head:'filled', body:'wavy'},
+    double: {label:'Double sens', head:'filled-both', body:'single'}
+  };
+  function ensureArrowMarkers(id, headSize){
+    var mw=(4+headSize*4).toFixed(2), mh=mw;
+    var refX=(mw*0.82).toFixed(2), refY=(mh/2).toFixed(2);
+    ['f-'+id,'o-'+id].forEach(function(markerId){
+      var open = markerId.indexOf('o-')===0;
+      var m=dynDefs.querySelector('#ah-'+markerId);
+      if(!m){
+        m=ns('marker'); m.setAttribute('id','ah-'+markerId); m.setAttribute('orient','auto');
+        dynDefs.appendChild(m);
+      }
+      m.setAttribute('markerWidth',mw); m.setAttribute('markerHeight',mh);
+      m.setAttribute('refX',refX); m.setAttribute('refY',refY);
+      m.innerHTML = open
+        ? '<path d="M0.6,0.6 L'+(mw-0.6)+','+(mh/2)+' L0.6,'+(mh-0.6)+'" fill="none" stroke="context-stroke" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"></path>'
+        : '<path d="M0,0 L'+mw+','+(mh/2)+' L0,'+mh+' Z" fill="context-fill"></path>';
+    });
+    return {filled:'ah-f-'+id, open:'ah-o-'+id};
+  }
+  function wavyPoints(points, amp){
+    if(points.length<2) return points;
+    var out=[points[0]];
+    for(var i=0;i<points.length-1;i++){
+      var a=points[i], b=points[i+1];
+      var dx=b.x-a.x, dy=b.y-a.y;
+      var len=Math.hypot(dx,dy)||1;
+      var nx=-dy/len, ny=dx/len;
+      var steps=Math.max(4, Math.round(len/2.5));
+      for(var k=1;k<=steps;k++){
+        var t=k/steps;
+        var wob=Math.sin(t*Math.PI*(len/4))*amp;
+        out.push({x:a.x+dx*t+nx*wob, y:a.y+dy*t+ny*wob});
+      }
+    }
+    return out;
+  }
   function arrowPointsStr(s){
     return s.points.map(function(p){ return p.x+','+p.y; }).join(' ');
   }
@@ -1189,7 +1229,7 @@
       } else if(s.kind==='arrow'){
         el=ns('polyline');
         el.setAttribute('points', arrowPointsStr(s));
-        el.setAttribute('marker-end','url(#annotArrow)');
+        el.setAttribute('stroke','transparent'); el.setAttribute('stroke-width','3'); el.setAttribute('fill','none');
       } else if(s.kind==='text'){
         el=ns('circle');
         el.setAttribute('cx',s.x); el.setAttribute('cy',s.y); el.setAttribute('r',2.4);
@@ -1199,16 +1239,48 @@
       if(s.kind!=='arrow' && s.kind!=='text'){
         el.setAttribute('fill', s.color); el.setAttribute('fill-opacity', s.opacity);
       }
-      if(s.kind==='arrow') el.setAttribute('fill','none');
-      if(s.kind!=='text'){
+      if(s.kind!=='text' && s.kind!=='arrow'){
         el.setAttribute('stroke', s.color);
-        el.setAttribute('stroke-opacity', s.kind==='arrow' ? (s.opacity!=null?s.opacity:1) : Math.min(1,s.opacity+0.4));
+        el.setAttribute('stroke-opacity', Math.min(1,s.opacity+0.4));
         el.setAttribute('stroke-width', s.strokeWidth!=null ? s.strokeWidth : 0.4);
         if(s.strokeStyle==='dashed') el.setAttribute('stroke-dasharray','2.2,1.6');
         else if(s.strokeStyle==='dotted'){ el.setAttribute('stroke-dasharray','0.3,1.1'); el.setAttribute('stroke-linecap','round'); }
       }
       el.addEventListener('pointerdown', function(e){ e.stopPropagation(); startShapeBodyDrag(s.id,e); });
       g.appendChild(el);
+      if(s.kind==='arrow'){
+        var type=ARROW_TYPES[s.arrowType||'simple']||ARROW_TYPES.simple;
+        var markers=ensureArrowMarkers(s.id, s.headSize!=null?s.headSize:1);
+        var baseW = s.strokeWidth!=null ? s.strokeWidth : 0.4;
+        var visW = type.body==='thick' ? baseW+0.5 : baseW;
+        var opac = s.opacity!=null ? s.opacity : 1;
+        var dash = s.strokeStyle==='dashed' || type.body==='dashed' ? '2.2,1.6' : (s.strokeStyle==='dotted' ? '0.3,1.1' : null);
+        function styleVisible(v){
+          v.setAttribute('fill','none'); v.setAttribute('stroke', s.color); v.setAttribute('stroke-opacity',opac);
+          v.setAttribute('stroke-width', visW); v.setAttribute('pointer-events','none');
+          if(dash){ v.setAttribute('stroke-dasharray',dash); if(s.strokeStyle==='dotted') v.setAttribute('stroke-linecap','round'); }
+          if(type.head==='filled' || type.head==='filled-both') v.setAttribute('marker-end','url(#'+markers.filled+')');
+          if(type.head==='open') v.setAttribute('marker-end','url(#'+markers.open+')');
+          if(type.head==='filled-both') v.setAttribute('marker-start','url(#'+markers.filled+')');
+        }
+        var pts = type.body==='wavy' ? wavyPoints(s.points, 1.3+visW*0.6) : s.points;
+        if(type.body==='double' && s.points.length>=2){
+          var a=s.points[0], b=s.points[s.points.length-1];
+          var dx=b.x-a.x, dy=b.y-a.y, len=Math.hypot(dx,dy)||1;
+          var nx=-dy/len, ny=dx/len, off=visW*0.9+0.3;
+          var l1=ns('polyline'), l2=ns('polyline');
+          l1.setAttribute('points', s.points.map(function(p){return (p.x+nx*off)+','+(p.y+ny*off);}).join(' '));
+          l2.setAttribute('points', s.points.map(function(p){return (p.x-nx*off)+','+(p.y-ny*off);}).join(' '));
+          styleVisible(l1); styleVisible(l2);
+          l1.setAttribute('marker-end','none'); l1.removeAttribute('marker-start');
+          g.appendChild(l1); g.appendChild(l2);
+        } else {
+          var vis=ns('polyline');
+          vis.setAttribute('points', pts.map(function(p){return p.x+','+p.y;}).join(' '));
+          styleVisible(vis);
+          g.appendChild(vis);
+        }
+      }
       if(state.selectedShape===s.id){
         if(s.kind==='rect' || s.kind==='triangle'){
           var hbr=makeHandle(s.x+s.w, s.y+s.h);
@@ -1260,6 +1332,10 @@
   function deleteShape(id){
     state.shapes=state.shapes.filter(function(s){return s.id!==id;});
     if(state.selectedShape===id) state.selectedShape=null;
+    ['ah-f-'+id,'ah-o-'+id].forEach(function(mid){
+      var m=dynDefs.querySelector('#'+mid);
+      if(m) m.remove();
+    });
     renderAll();
   }
 
@@ -1788,6 +1864,21 @@
 
     box.appendChild(colorRow('Couleur', s.color, function(v){ s.color=v; renderShapes(); }));
     if(s.kind==='arrow'){
+      var typeRow=document.createElement('div'); typeRow.className='slider-row';
+      var typeTop=document.createElement('div'); typeTop.className='sr-top';
+      typeTop.innerHTML='<span>Type de flèche</span>';
+      typeRow.appendChild(typeTop);
+      var typeSel=document.createElement('select');
+      typeSel.style.cssText='width:100%;background:var(--panel-2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 8px;font-size:12.5px;margin-bottom:8px;';
+      Object.keys(ARROW_TYPES).forEach(function(k){
+        var opt=document.createElement('option'); opt.value=k; opt.textContent=ARROW_TYPES[k].label;
+        if((s.arrowType||'simple')===k) opt.selected=true;
+        typeSel.appendChild(opt);
+      });
+      typeSel.addEventListener('change', function(){ s.arrowType=typeSel.value; renderShapes(); });
+      typeRow.appendChild(typeSel);
+      box.appendChild(typeRow);
+      box.appendChild(sliderRow('Taille de la pointe', s.headSize!=null?s.headSize:1, 0.4, 3, 0.1, '', function(v){ s.headSize=v; renderShapes(); }));
       box.appendChild(sliderRow('Transparence', s.opacity!=null?s.opacity:1, 0.15, 1, 0.05, '', function(v){ s.opacity=v; renderShapes(); }));
     } else {
       box.appendChild(sliderRow('Transparence du remplissage', s.opacity, 0.05, 0.9, 0.05, '', function(v){ s.opacity=v; renderShapes(); }));
@@ -2154,7 +2245,7 @@
         state.arrowDraft={x:ap.x,y:ap.y};
         renderShapes();
       } else {
-        var arrowShape={id:uid('shp'), kind:'arrow', points:[{x:state.arrowDraft.x,y:state.arrowDraft.y},{x:ap.x,y:ap.y}], color:'#f2a93b', opacity:1, strokeWidth:0.5, strokeStyle:'solid', fromTempsId:state.activeTempsId, durationTemps:null};
+        var arrowShape={id:uid('shp'), kind:'arrow', points:[{x:state.arrowDraft.x,y:state.arrowDraft.y},{x:ap.x,y:ap.y}], color:'#f2a93b', opacity:1, strokeWidth:0.5, strokeStyle:'solid', arrowType:'simple', headSize:1, fromTempsId:state.activeTempsId, durationTemps:null};
         state.shapes.push(arrowShape);
         state.arrowDraft=null;
         gGuides.innerHTML='';
