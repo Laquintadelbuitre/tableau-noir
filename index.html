@@ -294,6 +294,8 @@
       <button class="mode-btn" data-mode="shape-rect" title="Rectangle (R)"><span>▭</span><span class="qb-label">Rectangle</span></button>
       <button class="mode-btn" data-mode="shape-triangle" title="Triangle (T)"><span>▲</span><span class="qb-label">Triangle</span></button>
       <button class="mode-btn" data-mode="shape-ellipse" title="Cercle / ellipse (C)"><span>◯</span><span class="qb-label">Ellipse</span></button>
+      <button class="mode-btn" data-mode="shape-arrow" title="Flèche libre (F)"><span>↗</span><span class="qb-label">Flèche</span></button>
+      <button class="mode-btn" data-mode="shape-text" title="Texte (X)"><span>Aa</span><span class="qb-label">Texte</span></button>
     </div>
     <div class="qb-sep"></div>
     <div class="qb-group">
@@ -431,6 +433,11 @@
     <div class="stage">
       <div class="pitch-wrap">
         <svg id="pitch" viewBox="-4 -4 113 76" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="annotArrow" markerWidth="6" markerHeight="6" refX="4.6" refY="3" orient="auto">
+              <path d="M0,0 L6,3 L0,6 Z" fill="context-fill"></path>
+            </marker>
+          </defs>
           <g id="rotspace">
             <g id="bg"></g>
             <g id="markings"></g>
@@ -501,6 +508,8 @@
         <div><kbd>R</kbd></div><div>Rectangle</div>
         <div><kbd>T</kbd></div><div>Triangle</div>
         <div><kbd>C</kbd></div><div>Cercle / ellipse</div>
+        <div><kbd>F</kbd></div><div>Flèche libre</div>
+        <div><kbd>X</kbd></div><div>Texte</div>
         <div><kbd>Espace</kbd></div><div>Lecture / Pause</div>
         <div><kbd>Origine</kbd></div><div>Revenir au départ</div>
         <div><kbd>Fin</kbd></div><div>Aller à la fin de la séquence</div>
@@ -550,6 +559,7 @@
     selectedShape:null,
     selectedLink:null,
     shapeDraft:null,
+    arrowDraft:null,
     temps:[{id:'temps1', name:'Temps 1'}],
     activeTempsId:'temps1',
     livePos:null,
@@ -841,6 +851,7 @@
     return {x:c.x+5+col*4.5, y:c.y+3+row*4.5};
   }
   var pendingLabels=[];
+  var suppressAnnotLabels=false;
   function renderTokens(){
     gTokens.innerHTML='';
     pendingLabels=[];
@@ -875,6 +886,11 @@
         });
       }
     });
+    state.shapes.forEach(function(sh){
+      if(sh.kind==='text' && isVisibleNow(sh) && !suppressAnnotLabels){
+        pendingLabels.push({x:sh.x, y:sh.y, text:sh.text, size:sh.size||3.2, nudge:(sh.size||3.2)*0.32, color:sh.color||'#eef1ee', annot:true});
+      }
+    });
     var ballPos = live ? (live.ball||{x:state.ball.x,y:state.ball.y}) : basePosForTemps('ball', state.activeTempsId);
     gTokens.appendChild(makeTokenEl('ball', ballPos.x, ballPos.y, '#fff', '#333', 0.75, true));
     renderLinks();
@@ -889,10 +905,16 @@
       t.setAttribute('x', rp.x); t.setAttribute('y', rp.y+(job.nudge||0));
       t.setAttribute('text-anchor','middle');
       t.setAttribute('font-size', job.size);
-      t.setAttribute('font-family', "'Barlow Condensed',sans-serif");
-      t.setAttribute('font-weight','700');
+      t.setAttribute('font-family', job.annot ? "'Inter',sans-serif" : "'Barlow Condensed',sans-serif");
+      t.setAttribute('font-weight', job.annot ? '600' : '700');
       t.setAttribute('fill', job.badge ? '#412402' : (job.color || '#0a0e0d'));
-      t.setAttribute('pointer-events','none');
+      if(job.annot){
+        t.setAttribute('class','annot-label');
+        t.setAttribute('stroke','#0a0e0d'); t.setAttribute('stroke-width','0.35'); t.setAttribute('paint-order','stroke');
+        t.setAttribute('pointer-events','none');
+      } else {
+        t.setAttribute('pointer-events','none');
+      }
       if(job.dim) t.setAttribute('opacity','0.4');
       t.textContent=job.text;
       gLabels.appendChild(t);
@@ -1146,6 +1168,9 @@
   function trianglePoints(s){
     return (s.x+s.w/2)+','+s.y+' '+s.x+','+(s.y+s.h)+' '+(s.x+s.w)+','+(s.y+s.h);
   }
+  function arrowPointsStr(s){
+    return s.points.map(function(p){ return p.x+','+p.y; }).join(' ');
+  }
   function renderShapes(){
     gShapes.innerHTML='';
     state.shapes.forEach(function(s){
@@ -1158,16 +1183,30 @@
       } else if(s.kind==='triangle'){
         el=ns('polygon');
         el.setAttribute('points', trianglePoints(s));
-      } else {
+      } else if(s.kind==='ellipse'){
         el=ns('ellipse');
         el.setAttribute('cx',s.cx); el.setAttribute('cy',s.cy); el.setAttribute('rx',s.rx); el.setAttribute('ry',s.ry);
+      } else if(s.kind==='arrow'){
+        el=ns('polyline');
+        el.setAttribute('points', arrowPointsStr(s));
+        el.setAttribute('marker-end','url(#annotArrow)');
+      } else if(s.kind==='text'){
+        el=ns('circle');
+        el.setAttribute('cx',s.x); el.setAttribute('cy',s.y); el.setAttribute('r',2.4);
+        el.setAttribute('fill', s.color); el.setAttribute('fill-opacity','0.001');
       }
       el.setAttribute('class','shape-body');
-      el.setAttribute('fill', s.color); el.setAttribute('fill-opacity', s.opacity);
-      el.setAttribute('stroke', s.color); el.setAttribute('stroke-opacity', Math.min(1,s.opacity+0.4));
-      el.setAttribute('stroke-width', s.strokeWidth!=null ? s.strokeWidth : 0.4);
-      if(s.strokeStyle==='dashed') el.setAttribute('stroke-dasharray','2.2,1.6');
-      else if(s.strokeStyle==='dotted'){ el.setAttribute('stroke-dasharray','0.3,1.1'); el.setAttribute('stroke-linecap','round'); }
+      if(s.kind!=='arrow' && s.kind!=='text'){
+        el.setAttribute('fill', s.color); el.setAttribute('fill-opacity', s.opacity);
+      }
+      if(s.kind==='arrow') el.setAttribute('fill','none');
+      if(s.kind!=='text'){
+        el.setAttribute('stroke', s.color);
+        el.setAttribute('stroke-opacity', s.kind==='arrow' ? (s.opacity!=null?s.opacity:1) : Math.min(1,s.opacity+0.4));
+        el.setAttribute('stroke-width', s.strokeWidth!=null ? s.strokeWidth : 0.4);
+        if(s.strokeStyle==='dashed') el.setAttribute('stroke-dasharray','2.2,1.6');
+        else if(s.strokeStyle==='dotted'){ el.setAttribute('stroke-dasharray','0.3,1.1'); el.setAttribute('stroke-linecap','round'); }
+      }
       el.addEventListener('pointerdown', function(e){ e.stopPropagation(); startShapeBodyDrag(s.id,e); });
       g.appendChild(el);
       if(state.selectedShape===s.id){
@@ -1175,12 +1214,18 @@
           var hbr=makeHandle(s.x+s.w, s.y+s.h);
           hbr.addEventListener('pointerdown', function(e){ e.stopPropagation(); startShapeResize(s.id,'box-br'); });
           g.appendChild(hbr);
-        } else {
+        } else if(s.kind==='ellipse'){
           var hx=makeHandle(s.cx+s.rx, s.cy);
           hx.addEventListener('pointerdown', function(e){ e.stopPropagation(); startShapeResize(s.id,'ell-rx'); });
           var hy=makeHandle(s.cx, s.cy+s.ry);
           hy.addEventListener('pointerdown', function(e){ e.stopPropagation(); startShapeResize(s.id,'ell-ry'); });
           g.appendChild(hx); g.appendChild(hy);
+        } else if(s.kind==='arrow'){
+          s.points.forEach(function(pt,idx){
+            var hp=makeHandle(pt.x,pt.y);
+            hp.addEventListener('pointerdown', function(e){ e.stopPropagation(); startShapeResize(s.id,'arrow-pt-'+idx); });
+            g.appendChild(hp);
+          });
         }
       }
       gShapes.appendChild(g);
@@ -1203,6 +1248,12 @@
       el2.setAttribute('fill','var(--accent)'); el2.setAttribute('fill-opacity','0.22');
       el2.setAttribute('stroke','var(--accent)'); el2.setAttribute('stroke-width','0.3'); el2.setAttribute('stroke-dasharray','1,1');
       gShapes.appendChild(el2);
+    }
+    if(state.arrowDraft){
+      var ad=ns('circle');
+      ad.setAttribute('cx',state.arrowDraft.x); ad.setAttribute('cy',state.arrowDraft.y); ad.setAttribute('r','1');
+      ad.setAttribute('fill','var(--accent)');
+      gShapes.appendChild(ad);
     }
   }
   function selectShape(id){ state.selectedShape=id; state.selectedLink=null; state.pickedRun=null; renderAll(); }
@@ -1229,8 +1280,10 @@
     if(!s) return;
     var o=shapeDragState.orig;
     if(s.kind==='rect' || s.kind==='triangle'){ s.x=o.x+dx; s.y=o.y+dy; }
-    else { s.cx=o.cx+dx; s.cy=o.cy+dy; }
-    renderShapes();
+    else if(s.kind==='ellipse'){ s.cx=o.cx+dx; s.cy=o.cy+dy; }
+    else if(s.kind==='arrow'){ s.points=o.points.map(function(pt){ return {x:pt.x+dx, y:pt.y+dy}; }); }
+    else if(s.kind==='text'){ s.x=o.x+dx; s.y=o.y+dy; }
+    renderShapes(); renderTokens();
   }
   function onShapeBodyUp(){
     window.removeEventListener('pointermove', onShapeBodyMove);
@@ -1255,6 +1308,9 @@
       s.rx=Math.max(1.5, p.x-s.cx);
     } else if(shapeResizeState.kind==='ell-ry'){
       s.ry=Math.max(1.5, p.y-s.cy);
+    } else if(shapeResizeState.kind.indexOf('arrow-pt-')===0){
+      var idx=parseInt(shapeResizeState.kind.slice(9),10);
+      if(s.points[idx]){ s.points[idx].x=p.x; s.points[idx].y=p.y; }
     }
     renderShapes();
   }
@@ -1705,14 +1761,37 @@
     if(!s) return;
     var box=document.createElement('div'); box.className='run-editor';
     var head=document.createElement('div'); head.className='re-head';
-    var title=document.createElement('span'); title.textContent = s.kind==='rect' ? 'Rectangle' : (s.kind==='triangle' ? 'Triangle' : 'Cercle / ellipse');
+    var titleMap={rect:'Rectangle', triangle:'Triangle', ellipse:'Cercle / ellipse', arrow:'Flèche libre', text:'Texte'};
+    var title=document.createElement('span'); title.textContent = titleMap[s.kind] || s.kind;
     head.appendChild(title);
     var close=document.createElement('button'); close.className='re-close'; close.textContent='×';
     close.addEventListener('click', function(){ state.selectedShape=null; renderAll(); });
     head.appendChild(close);
     box.appendChild(head);
+
+    if(s.kind==='text'){
+      var editTxt=document.createElement('button'); editTxt.className='full-btn'; editTxt.textContent='✎ Modifier le texte';
+      editTxt.addEventListener('click', function(){
+        var nv=prompt('Texte de l\'annotation :', s.text);
+        if(nv && nv.trim()){ s.text=nv.trim(); renderTokens(); renderShapeEditor(); }
+      });
+      box.appendChild(editTxt);
+      box.appendChild(colorRow('Couleur', s.color, function(v){ s.color=v; renderTokens(); }));
+      box.appendChild(sliderRow('Taille du texte', s.size||3.2, 1.5, 8, 0.2, '', function(v){ s.size=v; renderTokens(); }));
+      box.appendChild(renderVisibilityControls(s, function(){ renderTokens(); }));
+      var delT=document.createElement('button'); delT.className='re-delete'; delT.textContent='Supprimer ce texte';
+      delT.addEventListener('click', function(){ deleteShape(s.id); });
+      box.appendChild(delT);
+      host.appendChild(box);
+      return;
+    }
+
     box.appendChild(colorRow('Couleur', s.color, function(v){ s.color=v; renderShapes(); }));
-    box.appendChild(sliderRow('Transparence du remplissage', s.opacity, 0.05, 0.9, 0.05, '', function(v){ s.opacity=v; renderShapes(); }));
+    if(s.kind==='arrow'){
+      box.appendChild(sliderRow('Transparence', s.opacity!=null?s.opacity:1, 0.15, 1, 0.05, '', function(v){ s.opacity=v; renderShapes(); }));
+    } else {
+      box.appendChild(sliderRow('Transparence du remplissage', s.opacity, 0.05, 0.9, 0.05, '', function(v){ s.opacity=v; renderShapes(); }));
+    }
 
     var styleSeg=document.createElement('div'); styleSeg.className='style-seg';
     [['solid','Plein'],['dashed','Tirets'],['dotted','Pointillés']].forEach(function(pair){
@@ -1722,12 +1801,33 @@
       styleSeg.appendChild(b);
     });
     box.appendChild(styleSeg);
-    box.appendChild(sliderRow('Épaisseur de la bordure', s.strokeWidth!=null?s.strokeWidth:0.4, 0, 3, 0.1, '', function(v){ s.strokeWidth=v; renderShapes(); }));
+    box.appendChild(sliderRow(s.kind==='arrow' ? 'Épaisseur du trait' : 'Épaisseur de la bordure', s.strokeWidth!=null?s.strokeWidth:0.4, 0, 3, 0.1, '', function(v){ s.strokeWidth=v; renderShapes(); }));
 
     if(s.kind==='ellipse'){
       var note=document.createElement('div'); note.className='hint'; note.style.marginBottom='10px';
       note.textContent='Glissez les deux points orange sur la forme pour la déformer en ellipse.';
       box.appendChild(note);
+    } else if(s.kind==='arrow'){
+      var note2=document.createElement('div'); note2.className='hint'; note2.style.marginBottom='10px';
+      note2.textContent='Glissez un point orange pour le repositionner. Ajoutez un angle pour courber le tracé.';
+      box.appendChild(note2);
+      var addAngle=document.createElement('button'); addAngle.className='full-btn'; addAngle.textContent='+ Ajouter un angle';
+      addAngle.addEventListener('click', function(){
+        var pts=s.points;
+        var a=pts[pts.length-2], b=pts[pts.length-1];
+        var mid={x:(a.x+b.x)/2, y:(a.y+b.y)/2};
+        pts.splice(pts.length-1, 0, mid);
+        renderShapes(); renderShapeEditor();
+      });
+      box.appendChild(addAngle);
+      if(s.points.length>2){
+        var removeAngle=document.createElement('button'); removeAngle.className='full-btn'; removeAngle.textContent='− Retirer le dernier angle';
+        removeAngle.addEventListener('click', function(){
+          s.points.splice(s.points.length-2,1);
+          renderShapes(); renderShapeEditor();
+        });
+        box.appendChild(removeAngle);
+      }
     }
     box.appendChild(renderVisibilityControls(s, function(){ renderShapes(); }));
     var del=document.createElement('button'); del.className='re-delete'; del.textContent='Supprimer cette forme';
@@ -2036,6 +2136,32 @@
     }
   }
   function handlePitchClick(e){
+    if(state.mode==='shape-text'){
+      if(e.target.closest && e.target.closest('.token')) return;
+      var pt=screenToLogical(e);
+      var txt=prompt('Texte de l\'annotation :','');
+      if(txt && txt.trim()){
+        var shape={id:uid('shp'), kind:'text', x:pt.x, y:pt.y, text:txt.trim(), color:'#eef1ee', size:3.2, fromTempsId:state.activeTempsId, durationTemps:null};
+        state.shapes.push(shape);
+        selectShape(shape.id);
+      }
+      return;
+    }
+    if(state.mode==='shape-arrow'){
+      if(e.target.closest && e.target.closest('.token')) return;
+      var ap=screenToLogical(e);
+      if(!state.arrowDraft){
+        state.arrowDraft={x:ap.x,y:ap.y};
+        renderShapes();
+      } else {
+        var arrowShape={id:uid('shp'), kind:'arrow', points:[{x:state.arrowDraft.x,y:state.arrowDraft.y},{x:ap.x,y:ap.y}], color:'#f2a93b', opacity:1, strokeWidth:0.5, strokeStyle:'solid', fromTempsId:state.activeTempsId, durationTemps:null};
+        state.shapes.push(arrowShape);
+        state.arrowDraft=null;
+        gGuides.innerHTML='';
+        selectShape(arrowShape.id);
+      }
+      return;
+    }
     if(!state.selection) return;
     if(state.mode!=='pass' && state.mode!=='move') return;
     var traj=buildTraj(state.mode, state.selection);
@@ -2059,6 +2185,16 @@
     if(!(e.target.closest && e.target.closest('.run-wrap'))) handlePitchClick(e);
   });
   svg.addEventListener('pointerdown', onPitchPointerDown);
+  svg.addEventListener('pointermove', function(e){
+    if(state.mode!=='shape-arrow' || !state.arrowDraft) return;
+    var p=screenToLogical(e);
+    gGuides.innerHTML='';
+    var prev=ns('line');
+    prev.setAttribute('x1',state.arrowDraft.x); prev.setAttribute('y1',state.arrowDraft.y);
+    prev.setAttribute('x2',p.x); prev.setAttribute('y2',p.y);
+    prev.setAttribute('stroke','var(--accent)'); prev.setAttribute('stroke-width','0.4'); prev.setAttribute('stroke-dasharray','1.2,1');
+    gGuides.appendChild(prev);
+  });
 
   // ---------------- Lecture ----------------
   function goToStart(){
@@ -2348,6 +2484,7 @@
       state.mode=btn.getAttribute('data-mode');
       state.selection=null;
       if(state.mode!=='link') state.linkDraft=[];
+      if(state.mode!=='shape-arrow'){ state.arrowDraft=null; gGuides.innerHTML=''; }
       stopPlayback(); state.livePos=null;
       var hint=document.getElementById('hintText');
       if(state.mode==='position') hint.textContent='Glissez un joueur ou le ballon sur le terrain pour le positionner.';
@@ -2357,6 +2494,8 @@
       else if(state.mode==='shape-rect') hint.textContent='Cliquez-glissez sur le terrain pour dessiner un rectangle.';
       else if(state.mode==='shape-triangle') hint.textContent='Cliquez-glissez sur le terrain pour dessiner un triangle.';
       else if(state.mode==='shape-ellipse') hint.textContent='Cliquez-glissez pour dessiner un cercle, puis utilisez les poignées orange pour le déformer en ellipse.';
+      else if(state.mode==='shape-arrow') hint.textContent="Cliquez pour le départ de la flèche, cliquez à nouveau pour l'arrivée (pressing, couloir de jeu, espace à exploiter...). Des angles pourront être ajoutés ensuite.";
+      else if(state.mode==='shape-text') hint.textContent='Cliquez sur le terrain pour ajouter une annotation texte.';
       if(state.mode==='link'){
         openLeftTab('tabReglages');
         if(window.innerWidth<=980) openSide('left');
@@ -2485,8 +2624,11 @@
     if(!opts.arrows) gArrows.style.display='none';
     if(!opts.shapes) gShapes.style.display='none';
     if(!opts.links) gLinks.style.display='none';
+    var annotLabels = !opts.shapes ? Array.prototype.slice.call(gLabels.querySelectorAll('.annot-label')) : [];
+    annotLabels.forEach(function(el){ el.style.display='none'; });
     try{ fn(); } finally {
       gArrows.style.display=prevArrows; gShapes.style.display=prevShapes; gLinks.style.display=prevLinks;
+      annotLabels.forEach(function(el){ el.style.display=''; });
     }
   }
   function getExportAnnotOpts(){
@@ -2548,6 +2690,7 @@
     if(!annotOpts.arrows) gArrows.style.display='none';
     if(!annotOpts.shapes) gShapes.style.display='none';
     if(!annotOpts.links) gLinks.style.display='none';
+    suppressAnnotLabels = !annotOpts.shapes;
 
     var preRoll=0.5, postRoll=0.7, gap=0.35;
     var tempsDurations=state.temps.map(function(t){ return Math.max(0.5, maxEndForTemps(t.id))+gap; });
@@ -2587,6 +2730,7 @@
       state.activeTempsId=originalActiveTemps;
       state.playTempsIdx=originalPlayTempsIdx;
       gArrows.style.display=prevArrows; gShapes.style.display=prevShapes; gLinks.style.display=prevLinks;
+      suppressAnnotLabels=false;
       render();
       btn.disabled=false;
       btn.innerHTML=vidBtnOrig;
@@ -2720,6 +2864,8 @@
       case 'r': clickMode('shape-rect'); break;
       case 't': clickMode('shape-triangle'); break;
       case 'c': clickMode('shape-ellipse'); break;
+      case 'f': clickMode('shape-arrow'); break;
+      case 'x': clickMode('shape-text'); break;
       case 'home': goToStart(); break;
       case 'end': goToEnd(); break;
       case 'delete': case 'backspace': deleteSelected(); e.preventDefault(); break;
