@@ -938,6 +938,20 @@
     for(var i=0;i<state.temps.length;i++) if(state.temps[i].id===tempsId) return i;
     return -1;
   }
+  function currentVisibilityTempsId(){
+    if(state.livePos && state.temps[state.playTempsIdx]) return state.temps[state.playTempsIdx].id;
+    return state.activeTempsId;
+  }
+  function isVisibleNow(item){
+    if(!item.fromTempsId) return true;
+    var fromIdx=tempsIndexOf(item.fromTempsId);
+    if(fromIdx===-1) return true;
+    var curIdx=tempsIndexOf(currentVisibilityTempsId());
+    if(curIdx===-1) return true;
+    if(curIdx<fromIdx) return false;
+    if(item.durationTemps==null) return true;
+    return curIdx < fromIdx+item.durationTemps;
+  }
   function runOrderKey(r){ return tempsIndexOf(r.tempsId)*100000 + r.start; }
   function runsForActor(id){
     return state.runs.filter(function(r){ return r.actorId===id; }).sort(function(a,b){ return runOrderKey(a)-runOrderKey(b); });
@@ -1135,6 +1149,7 @@
   function renderShapes(){
     gShapes.innerHTML='';
     state.shapes.forEach(function(s){
+      if(!isVisibleNow(s)) return;
       var g=ns('g'); g.setAttribute('class','shape-wrap'+(state.selectedShape===s.id?' selected':''));
       var el;
       if(s.kind==='rect'){
@@ -1276,16 +1291,16 @@
       var x=Math.min(d.x0,d.x1), y=Math.min(d.y0,d.y1);
       var w=Math.abs(d.x1-d.x0), h=Math.abs(d.y1-d.y0);
       if(dist<1){ x=d.x0-6; y=d.y0-4; w=12; h=8; }
-      shape={id:uid('shp'), kind:'rect', x:x,y:y,w:Math.max(3,w),h:Math.max(3,h), color:'#3aa0ff', opacity:0.32, strokeWidth:0.4, strokeStyle:'solid'};
+      shape={id:uid('shp'), kind:'rect', x:x,y:y,w:Math.max(3,w),h:Math.max(3,h), color:'#3aa0ff', opacity:0.32, strokeWidth:0.4, strokeStyle:'solid', fromTempsId:state.activeTempsId, durationTemps:null};
     } else if(shapeCreateState.mode==='shape-triangle'){
       var tx=Math.min(d.x0,d.x1), ty=Math.min(d.y0,d.y1);
       var tw=Math.abs(d.x1-d.x0), th=Math.abs(d.y1-d.y0);
       if(dist<1){ tx=d.x0-6; ty=d.y0-6; tw=12; th=10; }
-      shape={id:uid('shp'), kind:'triangle', x:tx,y:ty,w:Math.max(3,tw),h:Math.max(3,th), color:'#3aa0ff', opacity:0.32, strokeWidth:0.4, strokeStyle:'solid'};
+      shape={id:uid('shp'), kind:'triangle', x:tx,y:ty,w:Math.max(3,tw),h:Math.max(3,th), color:'#3aa0ff', opacity:0.32, strokeWidth:0.4, strokeStyle:'solid', fromTempsId:state.activeTempsId, durationTemps:null};
     } else {
       var rx=Math.abs(d.x1-d.x0)/2, ry=Math.abs(d.y1-d.y0)/2, cx=(d.x0+d.x1)/2, cy=(d.y0+d.y1)/2;
       if(dist<1){ cx=d.x0; cy=d.y0; rx=6; ry=6; }
-      shape={id:uid('shp'), kind:'ellipse', cx:cx,cy:cy,rx:Math.max(1.5,rx),ry:Math.max(1.5,ry), color:'#3aa0ff', opacity:0.32, strokeWidth:0.4, strokeStyle:'solid'};
+      shape={id:uid('shp'), kind:'ellipse', cx:cx,cy:cy,rx:Math.max(1.5,rx),ry:Math.max(1.5,ry), color:'#3aa0ff', opacity:0.32, strokeWidth:0.4, strokeStyle:'solid', fromTempsId:state.activeTempsId, durationTemps:null};
     }
     state.shapes.push(shape);
     state.shapeDraft=null;
@@ -1297,6 +1312,7 @@
   function renderLinks(){
     gLinks.innerHTML='';
     state.links.forEach(function(lnk){
+      if(!isVisibleNow(lnk)) return;
       var pts=lnk.playerIds.map(function(pid){ var p=getPlayer(pid); return p?{x:p.x,y:p.y}:null; }).filter(Boolean);
       if(pts.length<2) return;
       var g=ns('g'); g.setAttribute('class','shape-wrap'+(state.selectedLink===lnk.id?' selected':''));
@@ -1345,7 +1361,7 @@
   function finishLinkDraft(){
     var n=state.linkDraft.length;
     var kind = n>=3 ? 'zone' : 'line';
-    var link={id:uid('lnk'), kind:kind, playerIds:state.linkDraft.slice(), style:'solid', color: kind==='zone'?'#f2a93b':'#3aa0ff', width:0.6, fillOpacity: kind==='zone'?0.28:0};
+    var link={id:uid('lnk'), kind:kind, playerIds:state.linkDraft.slice(), style:'solid', color: kind==='zone'?'#f2a93b':'#3aa0ff', width:0.6, fillOpacity: kind==='zone'?0.28:0, fromTempsId:state.activeTempsId, durationTemps:null};
     state.links.push(link);
     state.linkDraft=[];
     renderLinkDraftPanel();
@@ -1630,6 +1646,58 @@
     row.appendChild(input); row.appendChild(lab);
     return row;
   }
+  function renderVisibilityControls(item, onChange){
+    var wrap=document.createElement('div');
+    var h=document.createElement('h3'); h.style.marginTop='4px'; h.textContent='Visibilité dans le temps';
+    wrap.appendChild(h);
+
+    if(!item.fromTempsId || tempsIndexOf(item.fromTempsId)===-1) item.fromTempsId=state.activeTempsId;
+
+    var selRow=document.createElement('div'); selRow.className='slider-row';
+    var selTop=document.createElement('div'); selTop.className='sr-top';
+    var selLab=document.createElement('span'); selLab.textContent='Apparaît à partir de';
+    selTop.appendChild(selLab);
+    selRow.appendChild(selTop);
+    var sel=document.createElement('select');
+    sel.style.cssText='width:100%;background:var(--panel-2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 8px;font-size:12.5px;';
+    state.temps.forEach(function(t){
+      var opt=document.createElement('option'); opt.value=t.id; opt.textContent=t.name;
+      if(item.fromTempsId===t.id) opt.selected=true;
+      sel.appendChild(opt);
+    });
+    sel.addEventListener('change', function(){ item.fromTempsId=sel.value; onChange(); });
+    selRow.appendChild(sel);
+    wrap.appendChild(selRow);
+
+    var limitLbl=document.createElement('label'); limitLbl.className='parallel-toggle'; limitLbl.style.marginTop='2px';
+    var chk=document.createElement('input'); chk.type='checkbox'; chk.checked=item.durationTemps!=null;
+    limitLbl.appendChild(chk);
+    limitLbl.appendChild(document.createTextNode(' limiter la durée d\'affichage'));
+    wrap.appendChild(limitLbl);
+
+    var durRow=document.createElement('div'); durRow.className='count-row'; durRow.style.marginTop='8px';
+    durRow.style.display = item.durationTemps!=null ? 'flex' : 'none';
+    var durLabel=document.createElement('div'); durLabel.className='label'; durLabel.textContent='Nombre de temps';
+    durRow.appendChild(durLabel);
+    var stepper=document.createElement('div'); stepper.className='stepper';
+    var minus=document.createElement('button'); minus.textContent='−'; minus.type='button';
+    var val=document.createElement('div'); val.className='val'; val.textContent=item.durationTemps||1;
+    var plus=document.createElement('button'); plus.textContent='+'; plus.type='button';
+    stepper.appendChild(minus); stepper.appendChild(val); stepper.appendChild(plus);
+    durRow.appendChild(stepper);
+    wrap.appendChild(durRow);
+
+    chk.addEventListener('change', function(){
+      item.durationTemps = chk.checked ? (item.durationTemps||1) : null;
+      durRow.style.display = chk.checked ? 'flex' : 'none';
+      val.textContent=item.durationTemps||1;
+      onChange();
+    });
+    minus.addEventListener('click', function(){ item.durationTemps=Math.max(1,(item.durationTemps||1)-1); val.textContent=item.durationTemps; onChange(); });
+    plus.addEventListener('click', function(){ item.durationTemps=Math.min(20,(item.durationTemps||1)+1); val.textContent=item.durationTemps; onChange(); });
+
+    return wrap;
+  }
   function renderShapeEditor(){
     var host=document.getElementById('shapeEditorHost');
     host.innerHTML='';
@@ -1661,6 +1729,7 @@
       note.textContent='Glissez les deux points orange sur la forme pour la déformer en ellipse.';
       box.appendChild(note);
     }
+    box.appendChild(renderVisibilityControls(s, function(){ renderShapes(); }));
     var del=document.createElement('button'); del.className='re-delete'; del.textContent='Supprimer cette forme';
     del.addEventListener('click', function(){ deleteShape(s.id); });
     box.appendChild(del);
@@ -1694,6 +1763,7 @@
     if(l.kind==='zone'){
       box.appendChild(sliderRow('Transparence du remplissage', l.fillOpacity, 0.05, 0.9, 0.05, '', function(v){ l.fillOpacity=v; renderLinks(); }));
     }
+    box.appendChild(renderVisibilityControls(l, function(){ renderLinks(); }));
     var del=document.createElement('button'); del.className='re-delete'; del.textContent=(l.kind==='zone'?'Supprimer cette zone':'Supprimer cette liaison');
     del.addEventListener('click', function(){ deleteLink(l.id); });
     box.appendChild(del);
@@ -2060,7 +2130,7 @@
     if(state.runs.length===0) return;
     var lastIdx=state.temps.length-1;
     var atEnd = state.playTempsIdx>=lastIdx && state.playTime>=maxEndForTemps(state.temps[lastIdx].id)-0.01;
-    if(atEnd || !state.livePos){ state.playTempsIdx=0; state.playTime=0; state.livePos=null; state.activeTempsId=state.temps[0].id; }
+    if(atEnd || !state.livePos){ state.playTempsIdx=0; state.playTime=0; state.livePos=null; state.activeTempsId=state.temps[0].id; renderShapes(); }
     state.playing=true;
     state.lastTs=performance.now();
     document.getElementById('btnPlayPause').innerHTML='⏸ Pause';
@@ -2090,6 +2160,7 @@
         state.playTime=0;
         state.activeTempsId=state.temps[state.playTempsIdx].id;
         document.getElementById('statusText').textContent='Animation en cours… ('+state.temps[state.playTempsIdx].name+')';
+        renderShapes();
         renderChrono();
         state.rafId=requestAnimationFrame(loop);
       } else {
@@ -2286,6 +2357,10 @@
       else if(state.mode==='shape-rect') hint.textContent='Cliquez-glissez sur le terrain pour dessiner un rectangle.';
       else if(state.mode==='shape-triangle') hint.textContent='Cliquez-glissez sur le terrain pour dessiner un triangle.';
       else if(state.mode==='shape-ellipse') hint.textContent='Cliquez-glissez pour dessiner un cercle, puis utilisez les poignées orange pour le déformer en ellipse.';
+      if(state.mode==='link'){
+        openLeftTab('tabReglages');
+        if(window.innerWidth<=980) openSide('left');
+      }
       renderTokens();
       renderLinkDraftPanel();
     });
@@ -2465,6 +2540,7 @@
     var originalPlayTime=state.playTime;
     var originalLivePos=state.livePos;
     var originalActiveTemps=state.activeTempsId;
+    var originalPlayTempsIdx=state.playTempsIdx;
     state.livePos=null;
 
     var annotOpts=getExportAnnotOpts();
@@ -2509,6 +2585,7 @@
       state.playTime=originalPlayTime;
       state.livePos=originalLivePos;
       state.activeTempsId=originalActiveTemps;
+      state.playTempsIdx=originalPlayTempsIdx;
       gArrows.style.display=prevArrows; gShapes.style.display=prevShapes; gLinks.style.display=prevLinks;
       render();
       btn.disabled=false;
@@ -2537,7 +2614,9 @@
       }
       localT=Math.max(0,localT);
       var tempsId=state.temps[tempsIdx].id;
+      state.playTempsIdx=tempsIdx;
       state.livePos=computeLivePositions(tempsId, localT);
+      renderShapes();
       renderTokens();
       document.getElementById('statusText').textContent='Enregistrement de la vidéo… '+elapsedReal.toFixed(1)+' / '+totalDuration.toFixed(1)+'s';
       btn.innerHTML='⏳ '+Math.round(elapsedReal/totalDuration*100)+'%';
@@ -2582,6 +2661,12 @@
 
   function openRightTab(tabId){
     var strip=document.querySelector('#sideRight .tabstrip');
+    if(!strip) return;
+    var btn=strip.querySelector('.tab-btn[data-tab="'+tabId+'"]');
+    if(btn) btn.click();
+  }
+  function openLeftTab(tabId){
+    var strip=document.querySelector('#sideLeft .tabstrip');
     if(!strip) return;
     var btn=strip.querySelector('.tab-btn[data-tab="'+tabId+'"]');
     if(btn) btn.click();
