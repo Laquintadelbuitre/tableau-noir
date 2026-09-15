@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-title" content="Ardoise tactique">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.svg">
-<title>Ardoise tactique </title>
+<title>Ardoise tactique — Limoges Football</title>
 <style>
   :root{
     --bg:#0a0e0d;
@@ -182,7 +182,6 @@
   .draft-panel{background:var(--panel-2);border:1px dashed var(--accent-dim);border-radius:8px;padding:10px;margin-top:8px;font-size:12px;}
   .draft-panel .dp-count{font-weight:700;color:var(--accent);margin-bottom:8px;}
   .draft-panel button{width:100%;margin-bottom:6px;border:none;border-radius:8px;padding:7px;font-size:12px;font-weight:600;cursor:pointer;}
-  .draft-panel .dp-line{background:var(--team);color:#fff;}
   .draft-panel .dp-zone{background:var(--accent);color:#171100;}
   .draft-panel .dp-cancel{background:transparent;border:1px solid var(--border);color:var(--text-dim);}
   .shape-wrap{cursor:move;}
@@ -259,7 +258,6 @@
   .lock-overlay.show{display:flex;}
   .lock-card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:28px 24px;max-width:320px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,.5);}
   .lock-card input{width:100%;background:var(--panel-2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:16px;letter-spacing:.15em;text-align:center;margin-bottom:10px;}
-  .lock-settings-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;}
 
   @media (max-width:980px){
     .side{display:none;}
@@ -288,7 +286,7 @@
       <div class="mark">⚽</div>
       <div class="brand-text">
         <h1>Ardoise <span class="accent">tactique</span></h1>
-        <p id="subtitle"> passes, déplacements &amp; chronologie</p>
+        <p id="subtitle">Limoges Football — passes, déplacements &amp; chronologie</p>
       </div>
     </div>
     <div class="header-actions">
@@ -3148,7 +3146,6 @@
     var v=localStorage.getItem(LOCK_KEY);
     return v!==null ? v : DEFAULT_PIN_HASH;
   }
-  function hasLock(){ return true; } // un code (par défaut ou personnalisé) protège toujours l'appli
   function showLock(){
     document.getElementById('lockOverlay').classList.add('show');
     document.getElementById('lockError').textContent='';
@@ -3230,7 +3227,7 @@
   renderSavedList();
   updateOnlineStatus();
   renderLockSettings();
-  if(hasLock()) showLock();
+  showLock();
 })();
 </script>
 </body>
