@@ -514,6 +514,12 @@
         <button class="full-btn" id="btnImportSchemas">⬆ Importer des schémas</button>
         <input type="file" id="importSchemasFile" accept="application/json,.json" style="display:none;">
         <div class="save-note">Sur mobile, « Exporter » ouvre le menu de partage natif (Drive, e-mail, etc. selon les apps installées). Sur ordinateur, le fichier se télécharge directement. Importez-le ensuite sur l'autre appareil.</div>
+        <div class="sep-h"></div>
+        <div class="cluster-label" style="margin-bottom:6px;">☁️ Google Drive</div>
+        <button class="full-btn" id="btnDriveConnect">Se connecter à Google Drive</button>
+        <button class="full-btn" id="btnDriveSave" style="display:none;">☁️ Sauvegarder sur Drive</button>
+        <button class="full-btn" id="btnDriveLoad" style="display:none;">☁️ Charger depuis Drive</button>
+        <div id="driveStatus" class="save-note">Non connecté.</div>
       </div>
     </div>
 
@@ -2754,14 +2760,19 @@
     if(saveSchema(name)){ renderSavedList(); document.getElementById('statusText').textContent='Schéma « '+name+' » enregistré.'; }
     else { document.getElementById('statusText').textContent="Échec de l'enregistrement."; }
   });
-  document.getElementById('btnExportSchemas').addEventListener('click', function(){
+  function buildSchemasBundle(){
     var idx=getIndex();
-    if(idx.length===0){ document.getElementById('statusText').textContent='Aucun schéma à exporter.'; return; }
     var bundle={app:'ardoise-tactique', version:1, exportedAt:new Date().toISOString(), schemas:{}};
     idx.forEach(function(name){
       var raw=localStorage.getItem('ardoise-tactique:item:'+name);
       if(raw){ try{ bundle.schemas[name]=JSON.parse(raw); }catch(e){} }
     });
+    return bundle;
+  }
+  document.getElementById('btnExportSchemas').addEventListener('click', function(){
+    var idx=getIndex();
+    if(idx.length===0){ document.getElementById('statusText').textContent='Aucun schéma à exporter.'; return; }
+    var bundle=buildSchemasBundle();
     var d=new Date(); var stamp=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
     var filename='ardoise-tactique-sauvegarde-'+stamp+'.json';
     var jsonStr=JSON.stringify(bundle,null,2);
@@ -2791,6 +2802,28 @@
   document.getElementById('btnImportSchemas').addEventListener('click', function(){
     document.getElementById('importSchemasFile').click();
   });
+  function importBundle(bundle){
+    if(!bundle || !bundle.schemas) return {ok:false, msg:"Ce fichier ne contient pas de schémas reconnus."};
+    var names=Object.keys(bundle.schemas);
+    if(names.length===0) return {ok:false, msg:"Aucun schéma dans cette sauvegarde."};
+    var existing=getIndex();
+    var overwriteAll=null;
+    var imported=0;
+    names.forEach(function(name){
+      if(existing.indexOf(name)!==-1){
+        if(overwriteAll===null){
+          overwriteAll=confirm('Certains schémas importés portent le même nom qu\'un schéma déjà présent sur cet appareil (ex. « '+name+' »). Remplacer les schémas existants en cas de conflit ?');
+        }
+        if(!overwriteAll) return;
+      }
+      localStorage.setItem('ardoise-tactique:item:'+name, JSON.stringify(bundle.schemas[name]));
+      if(existing.indexOf(name)===-1) existing.push(name);
+      imported++;
+    });
+    setIndex(existing);
+    renderSavedList();
+    return {ok:true, imported:imported, total:names.length};
+  }
   document.getElementById('importSchemasFile').addEventListener('change', function(e){
     var file=e.target.files[0];
     if(!file) return;
@@ -2798,30 +2831,156 @@
     reader.onload=function(){
       var bundle;
       try{ bundle=JSON.parse(reader.result); }catch(err){ document.getElementById('statusText').textContent="Fichier invalide."; return; }
-      if(!bundle || !bundle.schemas){ document.getElementById('statusText').textContent="Ce fichier ne contient pas de schémas reconnus."; return; }
-      var names=Object.keys(bundle.schemas);
-      if(names.length===0){ document.getElementById('statusText').textContent="Aucun schéma dans ce fichier."; return; }
-      var existing=getIndex();
-      var overwriteAll=null;
-      var imported=0;
-      names.forEach(function(name){
-        if(existing.indexOf(name)!==-1){
-          if(overwriteAll===null){
-            overwriteAll=confirm('Certains schémas importés portent le même nom qu\'un schéma déjà présent sur cet appareil (ex. « '+name+' »). Remplacer les schémas existants en cas de conflit ?');
-          }
-          if(!overwriteAll) return;
-        }
-        localStorage.setItem('ardoise-tactique:item:'+name, JSON.stringify(bundle.schemas[name]));
-        if(existing.indexOf(name)===-1) existing.push(name);
-        imported++;
-      });
-      setIndex(existing);
-      renderSavedList();
-      document.getElementById('statusText').textContent=imported+' schéma(s) importé(s) sur '+names.length+'.';
+      var res=importBundle(bundle);
+      document.getElementById('statusText').textContent = res.ok ? (res.imported+' schéma(s) importé(s) sur '+res.total+'.') : res.msg;
       e.target.value='';
     };
     reader.readAsText(file);
   });
+
+  // ---------------- Google Drive ----------------
+  var GOOGLE_CLIENT_ID='521371715594-0m10h5fppn1c8dpjp2694kvbt2r155p1.apps.googleusercontent.com';
+  var DRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
+  var DRIVE_FOLDER_NAME='Ardoise tactique - Sauvegardes';
+  var DRIVE_FILE_NAME='ardoise-tactique-sauvegarde.json';
+  var gisTokenClient=null;
+  var driveAccessToken=null;
+  var driveTokenExpiry=0;
+  var driveCurrentCb=null;
+
+  function driveSetStatus(msg){ document.getElementById('driveStatus').textContent=msg; }
+  function driveSetConnected(connected){
+    document.getElementById('btnDriveConnect').textContent = connected ? 'Changer de compte Google' : 'Se connecter à Google Drive';
+    document.getElementById('btnDriveSave').style.display = connected ? 'block' : 'none';
+    document.getElementById('btnDriveLoad').style.display = connected ? 'block' : 'none';
+  }
+
+  function loadGisScript(cb, errCb){
+    if(window.google && google.accounts && google.accounts.oauth2){ cb(); return; }
+    var s=document.createElement('script');
+    s.src='https://accounts.google.com/gsi/client';
+    s.async=true; s.defer=true;
+    s.onload=cb;
+    s.onerror=errCb;
+    document.head.appendChild(s);
+  }
+
+  function ensureDriveToken(cb, forceConsent){
+    loadGisScript(function(){
+      if(!gisTokenClient){
+        gisTokenClient=google.accounts.oauth2.initTokenClient({
+          client_id: GOOGLE_CLIENT_ID,
+          scope: DRIVE_SCOPE,
+          callback: function(resp){
+            if(resp.error){
+              driveSetStatus('Connexion refusée ou annulée.');
+              driveCurrentCb=null;
+              return;
+            }
+            driveAccessToken=resp.access_token;
+            driveTokenExpiry=Date.now()+(resp.expires_in*1000-60000);
+            driveSetConnected(true);
+            driveSetStatus('Connecté à Google Drive.');
+            var toCall=driveCurrentCb; driveCurrentCb=null;
+            if(toCall) toCall();
+          }
+        });
+      }
+      if(!forceConsent && driveAccessToken && Date.now()<driveTokenExpiry){ cb(); return; }
+      driveCurrentCb=cb;
+      gisTokenClient.requestAccessToken({prompt: forceConsent ? 'consent' : (driveAccessToken ? '' : 'consent')});
+    }, function(){
+      driveSetStatus("Impossible de contacter Google (vérifiez votre connexion internet).");
+    });
+  }
+
+  function driveFetch(url, opts){
+    opts=opts||{};
+    opts.headers=Object.assign({}, opts.headers, {Authorization:'Bearer '+driveAccessToken});
+    return fetch(url, opts).then(function(r){
+      if(!r.ok) return r.text().then(function(t){ throw new Error('HTTP '+r.status+' — '+t.slice(0,140)); });
+      var ct=r.headers.get('content-type')||'';
+      return ct.indexOf('application/json')!==-1 ? r.json() : r.text();
+    });
+  }
+
+  function driveFindOrCreateFolder(){
+    var q=encodeURIComponent("name='"+DRIVE_FOLDER_NAME+"' and mimeType='application/vnd.google-apps.folder' and trashed=false");
+    return driveFetch('https://www.googleapis.com/drive/v3/files?q='+q+'&fields=files(id,name)').then(function(data){
+      if(data.files && data.files.length>0) return data.files[0].id;
+      return driveFetch('https://www.googleapis.com/drive/v3/files', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({name:DRIVE_FOLDER_NAME, mimeType:'application/vnd.google-apps.folder'})
+      }).then(function(f){ return f.id; });
+    });
+  }
+
+  function driveFindFile(folderId){
+    var q=encodeURIComponent("name='"+DRIVE_FILE_NAME+"' and '"+folderId+"' in parents and trashed=false");
+    return driveFetch('https://www.googleapis.com/drive/v3/files?q='+q+'&fields=files(id,name,modifiedTime)').then(function(data){
+      return (data.files && data.files[0]) || null;
+    });
+  }
+
+  function driveSaveBackup(){
+    ensureDriveToken(function(){
+      driveSetStatus('Sauvegarde en cours…');
+      var bundle=buildSchemasBundle();
+      var count=Object.keys(bundle.schemas).length;
+      if(count===0){ driveSetStatus('Aucun schéma enregistré à sauvegarder.'); return; }
+      var content=JSON.stringify(bundle,null,2);
+      driveFindOrCreateFolder().then(function(folderId){
+        return driveFindFile(folderId).then(function(existing){
+          var metadata={name:DRIVE_FILE_NAME, mimeType:'application/json'};
+          if(!existing) metadata.parents=[folderId];
+          var boundary='ardoiseboundary';
+          var body=
+            '--'+boundary+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'+JSON.stringify(metadata)+'\r\n'+
+            '--'+boundary+'\r\nContent-Type: application/json\r\n\r\n'+content+'\r\n'+
+            '--'+boundary+'--';
+          var url=existing
+            ? 'https://www.googleapis.com/upload/drive/v3/files/'+existing.id+'?uploadType=multipart'
+            : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
+          return driveFetch(url, {
+            method: existing ? 'PATCH' : 'POST',
+            headers:{'Content-Type':'multipart/related; boundary='+boundary},
+            body: body
+          });
+        });
+      }).then(function(){
+        driveSetStatus(count+' schéma(s) sauvegardé(s) sur Drive à '+new Date().toLocaleTimeString('fr-FR')+'.');
+      }).catch(function(err){
+        driveSetStatus('Échec de la sauvegarde Drive : '+err.message);
+      });
+    });
+  }
+
+  function driveLoadBackup(){
+    ensureDriveToken(function(){
+      driveSetStatus('Recherche de la sauvegarde sur Drive…');
+      driveFindOrCreateFolder().then(function(folderId){
+        return driveFindFile(folderId);
+      }).then(function(file){
+        if(!file){ driveSetStatus('Aucune sauvegarde trouvée sur Drive pour le moment.'); return; }
+        return driveFetch('https://www.googleapis.com/drive/v3/files/'+file.id+'?alt=media').then(function(bundle){
+          var res=importBundle(bundle);
+          driveSetStatus(res.ok
+            ? res.imported+' schéma(s) chargé(s) depuis Drive (sauvegarde du '+new Date(file.modifiedTime).toLocaleString('fr-FR')+').'
+            : res.msg);
+        });
+      }).catch(function(err){
+        driveSetStatus('Échec du chargement Drive : '+err.message);
+      });
+    });
+  }
+
+  document.getElementById('btnDriveConnect').addEventListener('click', function(){
+    driveSetStatus('Connexion en cours…');
+    ensureDriveToken(function(){}, true);
+  });
+  document.getElementById('btnDriveSave').addEventListener('click', driveSaveBackup);
+  document.getElementById('btnDriveLoad').addEventListener('click', driveLoadBackup);
 
   function openSide(which){
     document.getElementById('sideLeft').classList.toggle('mobile-open', which==='left');
