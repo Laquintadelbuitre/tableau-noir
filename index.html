@@ -3,9 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Ardoise tactique </title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#0a0e0d">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Ardoise tactique">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.svg">
+<title>Ardoise tactique — Limoges Football</title>
 <style>
   :root{
     --bg:#0a0e0d;
@@ -30,11 +35,13 @@
     --pitch-a:#1c6b3a;
     --pitch-b:#186034;
     --line: rgba(255,255,255,.92);
+    --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    --font-head: 'Arial Narrow', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   }
   *{box-sizing:border-box;}
-  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;height:100%;}
-  h1,h2,h3{font-family:'Barlow Condensed',sans-serif;letter-spacing:.01em;}
-  button,input,select{font-family:'Inter',sans-serif;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:var(--font-body);height:100%;}
+  h1,h2,h3{font-family:var(--font-head);letter-spacing:.01em;}
+  button,input,select{font-family:var(--font-body);}
   .app{display:flex;flex-direction:column;height:100vh;min-height:660px;}
 
   /* ---------- Header ---------- */
@@ -69,6 +76,8 @@
   .quickbar .mode-btn.active{background:var(--team);color:#fff;}
   .quickbar .play-main{padding:8px 16px;border-radius:999px;font-size:12.5px;}
   .quickbar .play-secondary{padding:8px 12px;border-radius:999px;font-size:12.5px;}
+  .chain-toggle{display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text-dim);white-space:nowrap;padding:0 4px;cursor:pointer;user-select:none;}
+  .chain-toggle input{margin:0;}
   @media (max-width:820px){ .quickbar .qb-label{display:none;} .quickbar .mode-btn{padding:9px 10px;} }
 
   /* ---------- Tabs ---------- */
@@ -107,7 +116,7 @@
   .stage{flex:1;display:flex;align-items:center;justify-content:center;padding:18px;position:relative;min-width:0;}
 
   .block{margin-bottom:20px;}
-  .block h3{font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-dim);font-family:'Inter';font-weight:700;margin:0 0 10px;}
+  .block h3{font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-dim);font-family:var(--font-body);font-weight:700;margin:0 0 10px;}
 
   .count-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
   .count-row .label{flex:1;font-size:13px;color:var(--text);display:flex;align-items:center;gap:6px;}
@@ -203,6 +212,9 @@
   .temps-pill:hover{color:var(--text);}
   .temps-pill.active{background:var(--accent);border-color:var(--accent);color:#171100;}
   .temps-pill .tp-del{border:none;background:none;color:inherit;opacity:.6;cursor:pointer;font-size:11px;padding:0;line-height:1;}
+  .temps-pill .tp-move{border:none;background:none;color:inherit;opacity:.6;cursor:pointer;font-size:13px;padding:0 1px;line-height:1;}
+  .temps-pill .tp-move:disabled{opacity:.2;cursor:default;}
+  .temps-pill .tp-move:hover:not(:disabled){opacity:1;}
   .temps-pill .tp-del:hover{opacity:1;}
   .temps-add{border:1px dashed var(--border);background:transparent;color:var(--text-dim);padding:6px 12px;border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;}
   .temps-add:hover{color:var(--text);border-color:var(--accent);}
@@ -237,10 +249,17 @@
   .shortcuts-grid{display:grid;grid-template-columns:auto 1fr;gap:9px 14px;font-size:13px;align-items:center;}
   .shortcuts-grid kbd{
     background:var(--panel-3);border:1px solid var(--border);border-bottom-width:2px;border-radius:5px;
-    padding:2px 7px;font-family:'Inter';font-size:11.5px;font-weight:600;color:var(--text);white-space:nowrap;
+    padding:2px 7px;font-family:var(--font-body);font-size:11.5px;font-weight:600;color:var(--text);white-space:nowrap;
   }
   .shortcuts-grid > div:nth-child(odd){white-space:nowrap;}
   .shortcuts-grid > div:nth-child(even){color:var(--text-dim);}
+
+  /* ---------- Verrouillage ---------- */
+  .lock-overlay{display:none;position:fixed;inset:0;background:var(--bg);z-index:80;align-items:center;justify-content:center;padding:20px;}
+  .lock-overlay.show{display:flex;}
+  .lock-card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:28px 24px;max-width:320px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,.5);}
+  .lock-card input{width:100%;background:var(--panel-2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:16px;letter-spacing:.15em;text-align:center;margin-bottom:10px;}
+  .lock-settings-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;}
 
   @media (max-width:980px){
     .side{display:none;}
@@ -299,9 +318,12 @@
     </div>
     <div class="qb-sep"></div>
     <div class="qb-group">
-      <button class="play-secondary" id="btnRestart" title="Revenir au départ (Origine)">⏮</button>
-      <button class="play-main" id="btnPlayPause" title="Lecture / Pause (Espace)">▶ Lecture</button>
-      <button class="play-secondary" id="btnEnd" title="Aller à la fin (Fin)">⏭</button>
+      <button class="play-secondary" id="btnRestart" title="Revenir au départ de ce temps (Origine)">⏮</button>
+      <button class="play-main" id="btnPlayPause" title="Lecture / Pause de ce temps (Espace)">▶ Lecture</button>
+      <button class="play-secondary" id="btnEnd" title="Aller à la fin de ce temps (Fin)">⏭</button>
+      <label class="chain-toggle" title="Quand coché, la lecture enchaîne automatiquement sur le temps suivant à la fin de celui-ci.">
+        <input type="checkbox" id="chkChainPlayback"> Enchaîner
+      </label>
     </div>
   </div>
 
@@ -426,6 +448,13 @@
           <div id="linkDraftPanel"></div>
           <div class="hint">Passez en mode « Lier » (barre du haut) puis cliquez sur 2 joueurs ou plus pour voir apparaître les options ici.</div>
         </div>
+        <div class="block">
+          <h3>Verrouillage de l'appli</h3>
+          <div id="lockStatus" class="hint" style="margin-bottom:8px;"></div>
+          <button class="full-btn" id="btnSetLock">🔒 Définir un code d'accès</button>
+          <button class="full-btn" id="btnRemoveLock" style="display:none;">Retirer le code</button>
+          <button class="full-btn" id="btnLockNow" style="display:none;">Verrouiller maintenant</button>
+        </div>
       </div>
     </div>
 
@@ -481,6 +510,12 @@
         <button class="save-btn" id="btnSaveSchema">💾 Enregistrer ce schéma</button>
         <div id="savedList"></div>
         <div class="save-note">Les schémas sont enregistrés dans ce navigateur (localStorage), propres à cet appareil.</div>
+        <div class="sep-h"></div>
+        <div class="cluster-label" style="margin-bottom:6px;">Travailler sur plusieurs appareils</div>
+        <button class="full-btn" id="btnExportSchemas">⬇ Exporter / partager tous les schémas</button>
+        <button class="full-btn" id="btnImportSchemas">⬆ Importer des schémas</button>
+        <input type="file" id="importSchemasFile" accept="application/json,.json" style="display:none;">
+        <div class="save-note">Sur mobile, « Exporter » ouvre le menu de partage natif (Drive, e-mail, etc. selon les apps installées). Sur ordinateur, le fichier se télécharge directement. Importez-le ensuite sur l'autre appareil.</div>
       </div>
     </div>
 
@@ -513,6 +548,17 @@
         <div><kbd>Ctrl</kbd> <kbd>S</kbd></div><div>Enregistrer le schéma</div>
         <div><kbd>?</kbd></div><div>Afficher / masquer cette aide</div>
       </div>
+    </div>
+  </div>
+
+  <div class="lock-overlay" id="lockOverlay">
+    <div class="lock-card">
+      <div style="width:48px;height:48px;font-size:26px;margin:0 auto 14px;text-align:center;">🔒</div>
+      <h3 style="text-align:center;margin:0 0 6px;">Ardoise verrouillée</h3>
+      <p style="text-align:center;color:var(--text-dim);font-size:12.5px;margin:0 0 16px;">Entrez le code d'accès pour continuer.</p>
+      <input type="password" inputmode="numeric" id="lockInput" placeholder="Code" autocomplete="off">
+      <button class="save-btn" id="btnUnlock">Déverrouiller</button>
+      <div id="lockError" style="color:var(--danger);font-size:12px;text-align:center;margin-top:8px;min-height:16px;"></div>
     </div>
   </div>
 
@@ -559,7 +605,8 @@
     temps:[{id:'temps1', name:'Temps 1'}],
     activeTempsId:'temps1',
     livePos:null,
-    playTempsIdx:0
+    playTempsIdx:0,
+    chainPlayback:false
   };
   var DUR = {lent:3.5, normal:2.5, rapide:1.2};
   var uidCounter=1;
@@ -902,7 +949,7 @@
       t.setAttribute('x', rp.x); t.setAttribute('y', rp.y+(job.nudge||0));
       t.setAttribute('text-anchor','middle');
       t.setAttribute('font-size', job.size);
-      t.setAttribute('font-family', job.annot ? "'Inter',sans-serif" : "'Barlow Condensed',sans-serif");
+      t.setAttribute('font-family', job.annot ? "-apple-system,'Segoe UI',Roboto,sans-serif" : "'Arial Narrow','Segoe UI',Roboto,sans-serif");
       t.setAttribute('font-weight', job.annot ? '600' : '700');
       t.setAttribute('fill', job.badge ? '#412402' : (job.color || '#0a0e0d'));
       if(job.annot){
@@ -983,9 +1030,6 @@
     if(runs.length) return {x:runs[runs.length-1].to.x, y:runs[runs.length-1].to.y};
     var p=getPlayer(id);
     return {x:p.x, y:p.y};
-  }
-  function restingPos(id){
-    return chainedPositionUpTo(id, Infinity);
   }
   function basePosForTemps(id, tempsId){
     return chainedPositionUpTo(id, tempsIndexOf(tempsId));
@@ -1107,7 +1151,9 @@
   }
   function renderArrows(){
     gArrows.innerHTML='';
+    var visTempsId=currentVisibilityTempsId();
     state.runs.forEach(function(run){
+      if(run.tempsId!==visTempsId) return;
       var wrap=ns('g'); wrap.setAttribute('class','run-wrap');
       var d='M'+run.from.x+','+run.from.y+' Q'+run.cx+','+run.cy+' '+run.to.x+','+run.to.y;
       var col=runColor(run);
@@ -1607,15 +1653,25 @@
     var host=document.getElementById('tempsHost');
     host.innerHTML='';
     var row=document.createElement('div'); row.className='temps-row';
-    state.temps.forEach(function(t){
+    state.temps.forEach(function(t, idx){
       var pill=document.createElement('div');
       pill.className='temps-pill'+(t.id===state.activeTempsId?' active':'');
+      if(state.temps.length>1){
+        var moveLeft=document.createElement('button'); moveLeft.className='tp-move'; moveLeft.textContent='‹'; moveLeft.title='Déplacer avant';
+        moveLeft.disabled=(idx===0);
+        moveLeft.addEventListener('click', function(e){ e.stopPropagation(); moveTemps(t.id,-1); });
+        pill.appendChild(moveLeft);
+      }
       var label=document.createElement('span');
       label.textContent=t.name;
       pill.appendChild(label);
       pill.addEventListener('click', function(){ selectTemps(t.id); });
       pill.addEventListener('dblclick', function(e){ e.stopPropagation(); renameTemps(t.id); });
       if(state.temps.length>1){
+        var moveRight=document.createElement('button'); moveRight.className='tp-move'; moveRight.textContent='›'; moveRight.title='Déplacer après';
+        moveRight.disabled=(idx===state.temps.length-1);
+        moveRight.addEventListener('click', function(e){ e.stopPropagation(); moveTemps(t.id,1); });
+        pill.appendChild(moveRight);
         var del=document.createElement('button'); del.className='tp-del'; del.textContent='×'; del.title='Supprimer ce temps';
         del.addEventListener('click', function(e){ e.stopPropagation(); deleteTemps(t.id); });
         pill.appendChild(del);
@@ -1628,8 +1684,16 @@
     host.appendChild(row);
     var hint=document.createElement('div'); hint.className='hint';
     hint.style.marginTop='6px';
-    hint.textContent='Double-cliquez un temps pour le renommer. Les mouvements créés s\'ajoutent au temps sélectionné.';
+    hint.textContent='Double-cliquez un temps pour le renommer, utilisez ‹ › pour changer l\'ordre. Les mouvements créés s\'ajoutent au temps sélectionné.';
     host.appendChild(hint);
+  }
+  function moveTemps(id, dir){
+    var idx=state.temps.findIndex(function(t){return t.id===id;});
+    var newIdx=idx+dir;
+    if(idx===-1 || newIdx<0 || newIdx>=state.temps.length) return;
+    var tmp=state.temps[idx]; state.temps[idx]=state.temps[newIdx]; state.temps[newIdx]=tmp;
+    if(state.activeTempsId===id) state.playTempsIdx=newIdx;
+    renderChrono();
   }
   function addTemps(){
     var n=state.temps.length+1;
@@ -1641,6 +1705,8 @@
     stopPlayback();
     state.livePos=null;
     state.activeTempsId=tempsId;
+    state.playTempsIdx=tempsIndexOf(tempsId);
+    state.playTime=0;
     state.pickedRun=null;
     renderAll();
   }
@@ -1656,7 +1722,8 @@
     if(hasRuns && !confirm('Ce temps contient des courses. Le supprimer effacera aussi ces courses. Continuer ?')) return;
     state.runs=state.runs.filter(function(r){ return r.tempsId!==tempsId; });
     state.temps=state.temps.filter(function(t){ return t.id!==tempsId; });
-    if(state.activeTempsId===tempsId){ state.activeTempsId=state.temps[0].id; }
+    if(state.activeTempsId===tempsId){ state.activeTempsId=state.temps[0].id; state.livePos=null; state.playTime=0; }
+    state.playTempsIdx=tempsIndexOf(state.activeTempsId);
     renderAll();
   }
 
@@ -1675,6 +1742,11 @@
     var ruler=document.createElement('div'); ruler.className='chrono-ruler';
     var ticks=Math.min(10, Math.ceil(m));
     for(var t=0;t<=ticks;t++){ var sp=document.createElement('span'); sp.textContent=Math.round(m*t/ticks)+'s'; ruler.appendChild(sp); }
+    ruler.addEventListener('click', function(e){
+      var rect=ruler.getBoundingClientRect();
+      var frac=clamp((e.clientX-rect.left)/rect.width, 0, 1);
+      seekTo(frac*m);
+    });
     host.appendChild(ruler);
 
     var wrap=document.createElement('div'); wrap.className='chrono-wrap';
@@ -1691,7 +1763,11 @@
       lab.appendChild(txt);
       row.appendChild(lab);
       var track=document.createElement('div'); track.className='chrono-track';
-      track.addEventListener('click', function(){ pickRun(run.id); });
+      track.addEventListener('click', function(e){
+        var rect=track.getBoundingClientRect();
+        var frac=clamp((e.clientX-rect.left)/rect.width, 0, 1);
+        seekTo(frac*m);
+      });
       var bar=document.createElement('div'); bar.className='chrono-bar';
       bar.style.left=(run.start/m*100)+'%';
       bar.style.width=(Math.max(run.duration,0.15)/m*100)+'%';
@@ -2291,22 +2367,26 @@
   function goToStart(){
     stopPlayback();
     state.livePos=null;
-    state.playTempsIdx=0;
+    state.playTempsIdx=tempsIndexOf(state.activeTempsId);
     state.playTime=0;
-    state.activeTempsId=state.temps[0].id;
     renderAll();
   }
   function goToEnd(){
     stopPlayback();
-    var lastIdx=state.temps.length-1;
-    state.playTempsIdx=lastIdx;
-    state.playTime=maxEndForTemps(state.temps[lastIdx].id);
-    state.activeTempsId=state.temps[lastIdx].id;
-    var live={players:{}, ball:null};
-    state.players.forEach(function(p){ live.players[p.id]=restingPos(p.id); });
-    live.ball=restingPos('ball');
-    state.livePos=live;
+    var idx=tempsIndexOf(state.activeTempsId);
+    state.playTempsIdx=idx;
+    state.playTime=maxEndForTemps(state.activeTempsId);
+    state.livePos=computeLivePositions(state.activeTempsId, state.playTime);
     renderAll();
+  }
+  function seekTo(t){
+    stopPlayback();
+    var m=maxEndForTemps(state.activeTempsId);
+    state.playTempsIdx=tempsIndexOf(state.activeTempsId);
+    state.playTime=clamp(t,0,m);
+    state.livePos=computeLivePositions(state.activeTempsId, state.playTime);
+    renderTokens();
+    renderChrono();
   }
   function positionAtTime(runs, t, fallback){
     if(runs.length===0) return fallback;
@@ -2354,14 +2434,19 @@
   }
   function togglePlay(){
     if(state.playing){ pausePlayback(); return; }
-    if(state.runs.length===0) return;
-    var lastIdx=state.temps.length-1;
-    var atEnd = state.playTempsIdx>=lastIdx && state.playTime>=maxEndForTemps(state.temps[lastIdx].id)-0.01;
-    if(atEnd || !state.livePos){ state.playTempsIdx=0; state.playTime=0; state.livePos=null; state.activeTempsId=state.temps[0].id; renderShapes(); }
+    var tempsRuns=state.runs.filter(function(r){ return r.tempsId===state.activeTempsId; });
+    if(tempsRuns.length===0) return;
+    var idx=tempsIndexOf(state.activeTempsId);
+    var m=maxEndForTemps(state.activeTempsId);
+    if(state.playTempsIdx!==idx || state.playTime>=m-0.01 || !state.livePos){
+      state.playTime=0;
+      state.livePos=null;
+    }
+    state.playTempsIdx=idx;
     state.playing=true;
     state.lastTs=performance.now();
     document.getElementById('btnPlayPause').innerHTML='⏸ Pause';
-    document.getElementById('statusText').textContent='Animation en cours… ('+state.temps[state.playTempsIdx].name+')';
+    document.getElementById('statusText').textContent='Lecture… ('+state.temps[idx].name+')';
     state.rafId=requestAnimationFrame(loop);
   }
   function pausePlayback(){
@@ -2382,11 +2467,11 @@
       state.playTime=m;
       state.livePos=computeLivePositions(temps.id, state.playTime);
       renderTokens();
-      if(state.playTempsIdx < state.temps.length-1){
+      if(state.chainPlayback && state.playTempsIdx < state.temps.length-1){
         state.playTempsIdx++;
         state.playTime=0;
         state.activeTempsId=state.temps[state.playTempsIdx].id;
-        document.getElementById('statusText').textContent='Animation en cours… ('+state.temps[state.playTempsIdx].name+')';
+        document.getElementById('statusText').textContent='Lecture… ('+state.temps[state.playTempsIdx].name+')';
         renderShapes();
         renderChrono();
         state.rafId=requestAnimationFrame(loop);
@@ -2660,6 +2745,7 @@
   });
 
   document.getElementById('btnPlayPause').addEventListener('click', togglePlay);
+  document.getElementById('chkChainPlayback').addEventListener('change', function(e){ state.chainPlayback=e.target.checked; });
   document.getElementById('btnRestart').addEventListener('click', goToStart);
   document.getElementById('btnEnd').addEventListener('click', goToEnd);
 
@@ -2669,6 +2755,74 @@
     if(getIndex().indexOf(name)!==-1 && !confirm('Un schéma nommé « '+name+' » existe déjà. Le remplacer ?')) return;
     if(saveSchema(name)){ renderSavedList(); document.getElementById('statusText').textContent='Schéma « '+name+' » enregistré.'; }
     else { document.getElementById('statusText').textContent="Échec de l'enregistrement."; }
+  });
+  document.getElementById('btnExportSchemas').addEventListener('click', function(){
+    var idx=getIndex();
+    if(idx.length===0){ document.getElementById('statusText').textContent='Aucun schéma à exporter.'; return; }
+    var bundle={app:'ardoise-tactique', version:1, exportedAt:new Date().toISOString(), schemas:{}};
+    idx.forEach(function(name){
+      var raw=localStorage.getItem('ardoise-tactique:item:'+name);
+      if(raw){ try{ bundle.schemas[name]=JSON.parse(raw); }catch(e){} }
+    });
+    var d=new Date(); var stamp=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    var filename='ardoise-tactique-sauvegarde-'+stamp+'.json';
+    var jsonStr=JSON.stringify(bundle,null,2);
+    var blob=new Blob([jsonStr], {type:'application/json'});
+    var count=Object.keys(bundle.schemas).length;
+
+    var file = (typeof File!=='undefined') ? new File([blob], filename, {type:'application/json'}) : null;
+    if(navigator.share && file && (!navigator.canShare || navigator.canShare({files:[file]}))){
+      navigator.share({files:[file], title:filename}).then(function(){
+        document.getElementById('statusText').textContent=count+' schéma(s) partagé(s).';
+      }).catch(function(){ /* annulé ou indisponible : téléchargement classique en repli */
+        downloadJsonFile(blob, filename);
+        document.getElementById('statusText').textContent=count+' schéma(s) exporté(s).';
+      });
+    } else {
+      downloadJsonFile(blob, filename);
+      document.getElementById('statusText').textContent=count+' schéma(s) exporté(s).';
+    }
+  });
+  function downloadJsonFile(blob, filename){
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');
+    a.href=url; a.download=filename;
+    a.click();
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+  }
+  document.getElementById('btnImportSchemas').addEventListener('click', function(){
+    document.getElementById('importSchemasFile').click();
+  });
+  document.getElementById('importSchemasFile').addEventListener('change', function(e){
+    var file=e.target.files[0];
+    if(!file) return;
+    var reader=new FileReader();
+    reader.onload=function(){
+      var bundle;
+      try{ bundle=JSON.parse(reader.result); }catch(err){ document.getElementById('statusText').textContent="Fichier invalide."; return; }
+      if(!bundle || !bundle.schemas){ document.getElementById('statusText').textContent="Ce fichier ne contient pas de schémas reconnus."; return; }
+      var names=Object.keys(bundle.schemas);
+      if(names.length===0){ document.getElementById('statusText').textContent="Aucun schéma dans ce fichier."; return; }
+      var existing=getIndex();
+      var overwriteAll=null;
+      var imported=0;
+      names.forEach(function(name){
+        if(existing.indexOf(name)!==-1){
+          if(overwriteAll===null){
+            overwriteAll=confirm('Certains schémas importés portent le même nom qu\'un schéma déjà présent sur cet appareil (ex. « '+name+' »). Remplacer les schémas existants en cas de conflit ?');
+          }
+          if(!overwriteAll) return;
+        }
+        localStorage.setItem('ardoise-tactique:item:'+name, JSON.stringify(bundle.schemas[name]));
+        if(existing.indexOf(name)===-1) existing.push(name);
+        imported++;
+      });
+      setIndex(existing);
+      renderSavedList();
+      document.getElementById('statusText').textContent=imported+' schéma(s) importé(s) sur '+names.length+'.';
+      e.target.value='';
+    };
+    reader.readAsText(file);
   });
 
   function openSide(which){
@@ -2971,11 +3125,112 @@
     }
   });
 
+  // ---------------- Verrouillage local ----------------
+  var LOCK_KEY='ardoise-tactique:lockhash';
+  var DEFAULT_PIN_HASH='575a30bd2975cd02639884b04cc27006ac46473358f0d2f1380cd88abda303ba'; // SHA-256 du code par défaut
+  var lockAttempts=0, lockUntil=0;
+  function simpleHash(str){
+    var h=5381;
+    for(var i=0;i<str.length;i++){ h=((h<<5)+h) ^ str.charCodeAt(i); }
+    return 'fb:'+(h>>>0).toString(36);
+  }
+  async function secureHash(str){
+    if(window.crypto && window.crypto.subtle){
+      try{
+        var enc=new TextEncoder().encode(str);
+        var buf=await crypto.subtle.digest('SHA-256', enc);
+        return Array.from(new Uint8Array(buf)).map(function(b){return b.toString(16).padStart(2,'0');}).join('');
+      }catch(e){}
+    }
+    return simpleHash(str);
+  }
+  function storedHash(){
+    var v=localStorage.getItem(LOCK_KEY);
+    return v!==null ? v : DEFAULT_PIN_HASH;
+  }
+  function hasLock(){ return true; } // un code (par défaut ou personnalisé) protège toujours l'appli
+  function showLock(){
+    document.getElementById('lockOverlay').classList.add('show');
+    document.getElementById('lockError').textContent='';
+    var inp=document.getElementById('lockInput'); inp.value=''; inp.focus();
+  }
+  function hideLock(){ document.getElementById('lockOverlay').classList.remove('show'); }
+  async function tryUnlock(){
+    if(Date.now()<lockUntil){
+      var wait=Math.ceil((lockUntil-Date.now())/1000);
+      document.getElementById('lockError').textContent='Trop de tentatives. Réessayez dans '+wait+'s.';
+      return;
+    }
+    var val=document.getElementById('lockInput').value;
+    var h=await secureHash(val);
+    if(h===storedHash()){
+      lockAttempts=0;
+      hideLock();
+    } else {
+      lockAttempts++;
+      if(lockAttempts>=5){
+        lockUntil=Date.now()+30000;
+        document.getElementById('lockError').textContent='Trop de tentatives. Réessayez dans 30s.';
+      } else {
+        document.getElementById('lockError').textContent='Code incorrect.';
+      }
+      document.getElementById('lockInput').value='';
+      document.getElementById('lockInput').focus();
+    }
+  }
+  document.getElementById('btnUnlock').addEventListener('click', tryUnlock);
+  document.getElementById('lockInput').addEventListener('keydown', function(e){ if(e.key==='Enter') tryUnlock(); });
+
+  function renderLockSettings(){
+    var status=document.getElementById('lockStatus');
+    var custom=localStorage.getItem(LOCK_KEY)!==null;
+    status.textContent = custom ? "Un code personnalisé protège cette appli sur cet appareil." : "Le code par défaut protège cette appli (identique sur tous les appareils tant qu'il n'est pas changé ici).";
+    document.getElementById('btnSetLock').textContent = custom ? '🔒 Changer le code' : '🔒 Définir un code différent';
+    document.getElementById('btnRemoveLock').style.display = custom ? 'block' : 'none';
+    document.getElementById('btnLockNow').style.display = 'block';
+  }
+  document.getElementById('btnSetLock').addEventListener('click', async function(){
+    var code=prompt('Nouveau code d\'accès (4 caractères minimum) :');
+    if(!code) return;
+    if(code.trim().length<4){ alert('Le code doit contenir au moins 4 caractères.'); return; }
+    localStorage.setItem(LOCK_KEY, await secureHash(code.trim()));
+    renderLockSettings();
+    document.getElementById('statusText').textContent="Code d'accès enregistré sur cet appareil.";
+  });
+  document.getElementById('btnRemoveLock').addEventListener('click', function(){
+    if(!confirm("Revenir au code par défaut sur cet appareil ?")) return;
+    localStorage.removeItem(LOCK_KEY);
+    renderLockSettings();
+    document.getElementById('statusText').textContent="Code par défaut rétabli.";
+  });
+  document.getElementById('btnLockNow').addEventListener('click', function(){
+    showLock();
+  });
+
+  // ---------------- Mode hors ligne ----------------
+  if('serviceWorker' in navigator){
+    window.addEventListener('load', function(){
+      navigator.serviceWorker.register('sw.js').then(function(){
+        console.log('Service worker enregistré — utilisation hors ligne activée.');
+      }).catch(function(){ /* pas grave, l'appli reste utilisable en ligne */ });
+    });
+  }
+  function updateOnlineStatus(){
+    var el=document.getElementById('statusText');
+    if(!navigator.onLine){ el.textContent='Mode hors ligne — toutes les fonctions restent disponibles.'; }
+    else if(el.textContent.indexOf('hors ligne')!==-1){ el.textContent='Connexion rétablie.'; }
+  }
+  window.addEventListener('online', updateOnlineStatus);
+  window.addEventListener('offline', updateOnlineStatus);
+
   // ---------------- Init ----------------
   drawBackground();
   drawMarkings();
   rebuildPlayers();
   renderSavedList();
+  updateOnlineStatus();
+  renderLockSettings();
+  if(hasLock()) showLock();
 })();
 </script>
 </body>
