@@ -316,10 +316,10 @@
     </div>
     <div class="qb-sep"></div>
     <div class="qb-group">
-      <button class="play-secondary" id="btnRestart" title="Revenir au départ de ce temps (Origine)">⏮</button>
-      <button class="play-main" id="btnPlayPause" title="Lecture / Pause de ce temps (Espace)">▶ Lecture</button>
-      <button class="play-secondary" id="btnEnd" title="Aller à la fin de ce temps (Fin)">⏭</button>
-      <label class="chain-toggle" title="Quand coché, la lecture enchaîne automatiquement sur le temps suivant à la fin de celui-ci.">
+      <button class="play-secondary" id="btnRestart" title="Revenir au départ de cette séquence (Origine)">⏮</button>
+      <button class="play-main" id="btnPlayPause" title="Lecture / Pause de cette séquence (Espace)">▶ Lecture</button>
+      <button class="play-secondary" id="btnEnd" title="Aller à la fin de cette séquence (Fin)">⏭</button>
+      <label class="chain-toggle" title="Quand coché, la lecture enchaîne automatiquement sur la séquence suivante à la fin de celle-ci.">
         <input type="checkbox" id="chkChainPlayback"> Enchaîner
       </label>
     </div>
@@ -497,7 +497,7 @@
 
       <div class="tabpanel" id="tabChrono">
         <div class="block">
-          <h3>Temps</h3>
+          <h3>Séquences</h3>
           <div id="tempsHost"></div>
         </div>
         <div id="chronoHost"></div>
@@ -606,7 +606,7 @@
     selectedLink:null,
     shapeDraft:null,
     arrowDraft:null,
-    temps:[{id:'temps1', name:'Temps 1'}],
+    temps:[{id:'temps1', name:'Séquence 1'}],
     activeTempsId:'temps1',
     livePos:null,
     playTempsIdx:0,
@@ -1491,11 +1491,19 @@
   }
 
   // ---------------- Liaisons & zones entre joueurs ----------------
+  function getDisplayPos(id){
+    if(state.livePos){
+      if(id==='ball') return state.livePos.ball || {x:state.ball.x,y:state.ball.y};
+      return state.livePos.players[id] || {x:0,y:0};
+    }
+    if(state.mode==='position') return {x:getPlayer(id).x, y:getPlayer(id).y};
+    return basePosForTemps(id, state.activeTempsId);
+  }
   function renderLinks(){
     gLinks.innerHTML='';
     state.links.forEach(function(lnk){
       if(!isVisibleNow(lnk)) return;
-      var pts=lnk.playerIds.map(function(pid){ var p=getPlayer(pid); return p?{x:p.x,y:p.y}:null; }).filter(Boolean);
+      var pts=lnk.playerIds.map(function(pid){ var p=getPlayer(pid); return p?getDisplayPos(pid):null; }).filter(Boolean);
       if(pts.length<2) return;
       var g=ns('g'); g.setAttribute('class','shape-wrap'+(state.selectedLink===lnk.id?' selected':''));
       var pointsStr=pts.map(function(p){return p.x+','+p.y;}).join(' ');
@@ -1676,19 +1684,19 @@
         moveRight.disabled=(idx===state.temps.length-1);
         moveRight.addEventListener('click', function(e){ e.stopPropagation(); moveTemps(t.id,1); });
         pill.appendChild(moveRight);
-        var del=document.createElement('button'); del.className='tp-del'; del.textContent='×'; del.title='Supprimer ce temps';
+        var del=document.createElement('button'); del.className='tp-del'; del.textContent='×'; del.title='Supprimer cette séquence';
         del.addEventListener('click', function(e){ e.stopPropagation(); deleteTemps(t.id); });
         pill.appendChild(del);
       }
       row.appendChild(pill);
     });
-    var add=document.createElement('button'); add.className='temps-add'; add.textContent='+ Temps';
+    var add=document.createElement('button'); add.className='temps-add'; add.textContent='+ Séquence';
     add.addEventListener('click', addTemps);
     row.appendChild(add);
     host.appendChild(row);
     var hint=document.createElement('div'); hint.className='hint';
     hint.style.marginTop='6px';
-    hint.textContent='Double-cliquez un temps pour le renommer, utilisez ‹ › pour changer l\'ordre. Les mouvements créés s\'ajoutent au temps sélectionné.';
+    hint.textContent='Double-cliquez une séquence pour la renommer, utilisez ‹ › pour changer l\'ordre. Les mouvements créés s\'ajoutent à la séquence sélectionnée.';
     host.appendChild(hint);
   }
   function moveTemps(id, dir){
@@ -1701,7 +1709,7 @@
   }
   function addTemps(){
     var n=state.temps.length+1;
-    var t={id:uid('temps'), name:'Temps '+n};
+    var t={id:uid('temps'), name:'S\u00e9quence '+n};
     state.temps.push(t);
     selectTemps(t.id);
   }
@@ -1717,13 +1725,13 @@
   function renameTemps(tempsId){
     var t=state.temps.find(function(x){return x.id===tempsId;});
     if(!t) return;
-    var name=prompt('Nom du temps :', t.name);
+    var name=prompt('Nom de la s\u00e9quence :', t.name);
     if(name && name.trim()){ t.name=name.trim(); renderTempsNav(); renderChrono(); }
   }
   function deleteTemps(tempsId){
     if(state.temps.length<=1) return;
     var hasRuns=state.runs.some(function(r){return r.tempsId===tempsId;});
-    if(hasRuns && !confirm('Ce temps contient des courses. Le supprimer effacera aussi ces courses. Continuer ?')) return;
+    if(hasRuns && !confirm('Cette s\u00e9quence contient des courses. La supprimer effacera aussi ces courses. Continuer ?')) return;
     state.runs=state.runs.filter(function(r){ return r.tempsId!==tempsId; });
     state.temps=state.temps.filter(function(t){ return t.id!==tempsId; });
     if(state.activeTempsId===tempsId){ state.activeTempsId=state.temps[0].id; state.livePos=null; state.playTime=0; }
@@ -1738,7 +1746,7 @@
     host.innerHTML='';
     var tempsRuns=state.runs.filter(function(r){ return r.tempsId===state.activeTempsId; });
     if(tempsRuns.length===0){
-      host.innerHTML='<div class="empty-steps">Aucune course dans ce temps. Utilisez « Tracer une passe » ou « Tracer un déplacement » puis cliquez sur le terrain.</div>';
+      host.innerHTML='<div class="empty-steps">Aucune course dans cette séquence. Utilisez « Tracer une passe » ou « Tracer un déplacement » puis cliquez sur le terrain.</div>';
       return;
     }
     var m=Math.max(6, maxEndForTemps(state.activeTempsId)+0.3);
@@ -1860,7 +1868,7 @@
   }
   function renderVisibilityControls(item, onChange){
     var wrap=document.createElement('div');
-    var h=document.createElement('h3'); h.style.marginTop='4px'; h.textContent='Visibilité dans le temps';
+    var h=document.createElement('h3'); h.style.marginTop='4px'; h.textContent='Visibilit\u00e9 par s\u00e9quence';
     wrap.appendChild(h);
 
     if(!item.fromTempsId || tempsIndexOf(item.fromTempsId)===-1) item.fromTempsId=state.activeTempsId;
@@ -1889,7 +1897,7 @@
 
     var durRow=document.createElement('div'); durRow.className='count-row'; durRow.style.marginTop='8px';
     durRow.style.display = item.durationTemps!=null ? 'flex' : 'none';
-    var durLabel=document.createElement('div'); durLabel.className='label'; durLabel.textContent='Nombre de temps';
+    var durLabel=document.createElement('div'); durLabel.className='label'; durLabel.textContent='Nombre de s\u00e9quences';
     durRow.appendChild(durLabel);
     var stepper=document.createElement('div'); stepper.className='stepper';
     var minus=document.createElement('button'); minus.textContent='−'; minus.type='button';
@@ -2587,7 +2595,7 @@
       document.getElementById('oppCountVal').textContent=state.oppCount;
       state.players=data.players; state.ball=data.ball; state.runs=data.runs||[];
       state.shapes=data.shapes||[]; state.links=data.links||[];
-      state.temps = (data.temps && data.temps.length) ? data.temps : [{id:'temps1', name:'Temps 1'}];
+      state.temps = (data.temps && data.temps.length) ? data.temps : [{id:'temps1', name:'Séquence 1'}];
       state.runs.forEach(function(r){ if(!r.tempsId) r.tempsId=state.temps[0].id; });
       state.activeTempsId = data.activeTempsId && state.temps.some(function(t){return t.id===data.activeTempsId;}) ? data.activeTempsId : state.temps[0].id;
       state.pickedRun=null; state.selection=null; state.playTime=0; state.livePos=null; state.playTempsIdx=0;
@@ -3094,8 +3102,8 @@
     if(!annotOpts.links) gLinks.style.display='none';
     suppressAnnotLabels = !annotOpts.shapes;
 
-    var preRoll=0.5, postRoll=0.7, gap=0.35;
-    var tempsDurations=state.temps.map(function(t){ return Math.max(0.5, maxEndForTemps(t.id))+gap; });
+    var preRoll=0.5, postRoll=0.7;
+    var tempsDurations=state.temps.map(function(t){ return Math.max(0.5, maxEndForTemps(t.id)); });
     var animEnd=tempsDurations.reduce(function(a,b){return a+b;},0);
     var totalDuration=animEnd+preRoll+postRoll;
 
@@ -3146,6 +3154,19 @@
     document.getElementById('statusText').textContent='Enregistrement de la vidéo… 0.0 / '+totalDuration.toFixed(1)+'s';
     var startTs=performance.now();
 
+    function renderStateAndSerialize(tempsId, localT, cb){
+      state.playTempsIdx=tempsIndexOf(tempsId);
+      state.livePos=computeLivePositions(tempsId, localT);
+      renderShapes();
+      renderArrows();
+      renderTokens();
+      var svgStr=serializeSvgWithStyles();
+      var img=new Image();
+      img.onload=function(){ cb(img); };
+      img.onerror=function(){ cb(null); };
+      img.src='data:image/svg+xml;base64,'+btoa(unescape(encodeURIComponent(svgStr)));
+    }
+
     function frame(){
       var elapsedReal=(performance.now()-startTs)/1000;
       if(elapsedReal>totalDuration || stopped){
@@ -3153,28 +3174,41 @@
         return;
       }
       var tIntoAnim=clamp(elapsedReal-preRoll, 0, animEnd);
-      var acc=0, tempsIdx=tempsDurations.length-1, localT=0;
+      var acc=0, tempsIdx=tempsDurations.length-1, localT=tempsDurations[tempsDurations.length-1];
       for(var k=0;k<tempsDurations.length;k++){
-        if(tIntoAnim <= acc+tempsDurations[k]){ tempsIdx=k; localT=Math.min(tIntoAnim-acc, tempsDurations[k]-gap); break; }
+        if(tIntoAnim <= acc+tempsDurations[k]){ tempsIdx=k; localT=tIntoAnim-acc; break; }
         acc+=tempsDurations[k];
       }
       localT=Math.max(0,localT);
-      var tempsId=state.temps[tempsIdx].id;
-      state.playTempsIdx=tempsIdx;
-      state.livePos=computeLivePositions(tempsId, localT);
-      renderShapes();
-      renderTokens();
+
       document.getElementById('statusText').textContent='Enregistrement de la vidéo… '+elapsedReal.toFixed(1)+' / '+totalDuration.toFixed(1)+'s';
       btn.innerHTML='⏳ '+Math.round(elapsedReal/totalDuration*100)+'%';
-      var svgStr=serializeSvgWithStyles();
-      var img=new Image();
-      img.onload=function(){
-        ctx.clearRect(0,0,canvas.width,canvas.height);
-        ctx.drawImage(img,0,0,canvas.width,canvas.height);
-        requestAnimationFrame(frame);
-      };
-      img.onerror=function(){ requestAnimationFrame(frame); };
-      img.src='data:image/svg+xml;base64,'+btoa(unescape(encodeURIComponent(svgStr)));
+
+      var hasNext=tempsIdx<tempsDurations.length-1;
+      var thisDur=tempsDurations[tempsIdx];
+      var fadeDur=hasNext ? Math.min(0.45, thisDur*0.3, tempsDurations[tempsIdx+1]*0.3) : 0;
+      var fadeStart=thisDur-fadeDur;
+
+      if(hasNext && fadeDur>0.02 && localT>fadeStart){
+        var fadeProgress=clamp((localT-fadeStart)/fadeDur, 0, 1);
+        var tempsIdA=state.temps[tempsIdx].id, tempsIdB=state.temps[tempsIdx+1].id;
+        renderStateAndSerialize(tempsIdA, localT, function(imgA){
+          renderStateAndSerialize(tempsIdB, 0, function(imgB){
+            ctx.clearRect(0,0,canvas.width,canvas.height);
+            ctx.globalAlpha=1;
+            if(imgA) ctx.drawImage(imgA,0,0,canvas.width,canvas.height);
+            if(imgB){ ctx.globalAlpha=fadeProgress; ctx.drawImage(imgB,0,0,canvas.width,canvas.height); ctx.globalAlpha=1; }
+            requestAnimationFrame(frame);
+          });
+        });
+      } else {
+        var tempsId=state.temps[tempsIdx].id;
+        renderStateAndSerialize(tempsId, localT, function(img){
+          ctx.clearRect(0,0,canvas.width,canvas.height);
+          if(img) ctx.drawImage(img,0,0,canvas.width,canvas.height);
+          requestAnimationFrame(frame);
+        });
+      }
     }
     recorder.start();
     frame();
