@@ -3184,31 +3184,12 @@
       document.getElementById('statusText').textContent='Enregistrement de la vidéo… '+elapsedReal.toFixed(1)+' / '+totalDuration.toFixed(1)+'s';
       btn.innerHTML='⏳ '+Math.round(elapsedReal/totalDuration*100)+'%';
 
-      var hasNext=tempsIdx<tempsDurations.length-1;
-      var thisDur=tempsDurations[tempsIdx];
-      var fadeDur=hasNext ? Math.min(0.45, thisDur*0.3, tempsDurations[tempsIdx+1]*0.3) : 0;
-      var fadeStart=thisDur-fadeDur;
-
-      if(hasNext && fadeDur>0.02 && localT>fadeStart){
-        var fadeProgress=clamp((localT-fadeStart)/fadeDur, 0, 1);
-        var tempsIdA=state.temps[tempsIdx].id, tempsIdB=state.temps[tempsIdx+1].id;
-        renderStateAndSerialize(tempsIdA, localT, function(imgA){
-          renderStateAndSerialize(tempsIdB, 0, function(imgB){
-            ctx.clearRect(0,0,canvas.width,canvas.height);
-            ctx.globalAlpha=1;
-            if(imgA) ctx.drawImage(imgA,0,0,canvas.width,canvas.height);
-            if(imgB){ ctx.globalAlpha=fadeProgress; ctx.drawImage(imgB,0,0,canvas.width,canvas.height); ctx.globalAlpha=1; }
-            requestAnimationFrame(frame);
-          });
-        });
-      } else {
-        var tempsId=state.temps[tempsIdx].id;
-        renderStateAndSerialize(tempsId, localT, function(img){
-          ctx.clearRect(0,0,canvas.width,canvas.height);
-          if(img) ctx.drawImage(img,0,0,canvas.width,canvas.height);
-          requestAnimationFrame(frame);
-        });
-      }
+      var tempsId=state.temps[tempsIdx].id;
+      renderStateAndSerialize(tempsId, localT, function(img){
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+        if(img) ctx.drawImage(img,0,0,canvas.width,canvas.height);
+        requestAnimationFrame(frame);
+      });
     }
     recorder.start();
     frame();
