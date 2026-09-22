@@ -158,6 +158,8 @@
   .run-hit.picked{filter:drop-shadow(0 0 3px rgba(242,169,59,.9));}
   .bendhandle{cursor:grab;opacity:.32;}
   .bendhandle:hover, .run-wrap:hover .bendhandle{opacity:.9;}
+  .endpoint-handle{cursor:grab;}
+  .endpoint-handle:active{cursor:grabbing;}
 
   /* ---------- Bottom bar ---------- */
   .bottombar{display:flex;justify-content:space-between;align-items:center;padding:9px 20px;background:var(--panel);border-top:1px solid var(--border);font-size:12px;color:var(--text-dim);}
@@ -570,6 +572,7 @@
 
 <script>
 
+
 (function(){
   "use strict";
 
@@ -602,6 +605,7 @@
     shapes:[],
     links:[],
     linkDraft:[],
+    passDraft:[],
     selectedShape:null,
     selectedLink:null,
     shapeDraft:null,
@@ -977,7 +981,8 @@
   }
   function makeTokenEl(id,x,y,fill,stroke,r,isBall,isGhost,isParked){
     var g=ns('g');
-    var cls='token'+(state.selection===id?' selected':'')+((state.mode==='link' && state.linkDraft.indexOf(id)!==-1)?' in-draft':'')+(isGhost?' ghost':'');
+    var inDraft=(state.mode==='link' && state.linkDraft.indexOf(id)!==-1)||(state.mode==='pass' && state.passDraft.indexOf(id)!==-1);
+    var cls='token'+(state.selection===id?' selected':'')+(inDraft?' in-draft':'')+(isGhost?' ghost':'');
     g.setAttribute('class',cls);
     g.setAttribute('data-id',id);
     g.setAttribute('transform','translate('+x+','+y+')');
@@ -1119,7 +1124,7 @@
       strokeWidth: 0.1,
       opacity: 1
     };
-    if(meta){ run.receiverId=meta.receiverId; }
+    if(meta){ run.receiverId=meta.receiverId; run.fromPlayerId=meta.fromPlayerId||null; }
     var c=defaultControl(from,to);
     run.cx=c.x; run.cy=c.y;
     state.runs.push(run);
@@ -1194,6 +1199,22 @@
       handle.setAttribute('data-bend-id',run.id);
       handle.addEventListener('pointerdown', function(e){ e.stopPropagation(); startBendDrag(run.id,e); });
       wrap.appendChild(handle);
+
+      if(state.pickedRun===run.id){
+        var fh=ns('circle');
+        fh.setAttribute('cx',run.from.x); fh.setAttribute('cy',run.from.y); fh.setAttribute('r','1.6');
+        fh.setAttribute('fill','#fff'); fh.setAttribute('stroke',col); fh.setAttribute('stroke-width','0.55');
+        fh.setAttribute('class','endpoint-handle endpoint-from');
+        fh.addEventListener('pointerdown', function(e){ e.stopPropagation(); startEndpointDrag(run.id,'from',e); });
+        wrap.appendChild(fh);
+
+        var th=ns('circle');
+        th.setAttribute('cx',run.to.x); th.setAttribute('cy',run.to.y); th.setAttribute('r','1.6');
+        th.setAttribute('fill',col); th.setAttribute('stroke','#fff'); th.setAttribute('stroke-width','0.4');
+        th.setAttribute('class','endpoint-handle endpoint-to');
+        th.addEventListener('pointerdown', function(e){ e.stopPropagation(); startEndpointDrag(run.id,'to',e); });
+        wrap.appendChild(th);
+      }
 
       gArrows.appendChild(wrap);
     });
@@ -1576,6 +1597,85 @@
     window.removeEventListener('pointerup', onBendUp);
   }
 
+  var endpointDrag=null;
+  function findPrevRun(run){
+    var runs=runsForActorInTemps(run.actorId, run.tempsId);
+    var idx=runs.findIndex(function(r){ return r.id===run.id; });
+    if(idx<=0) return null;
+    return runs[idx-1];
+  }
+  function cascadeEndpointChange(run, which, oldPt, newPt){
+    if(which==='to'){
+      var next=findNextRun(run);
+      if(next && Math.abs(next.from.x-oldPt.x)<0.01 && Math.abs(next.from.y-oldPt.y)<0.01){
+        next.from={x:newPt.x,y:newPt.y};
+        var c=defaultControl(next.from, next.to);
+        next.cx=c.x; next.cy=c.y;
+      }
+    } else {
+      var prev=findPrevRun(run);
+      if(prev && Math.abs(prev.to.x-oldPt.x)<0.01 && Math.abs(prev.to.y-oldPt.y)<0.01){
+        prev.to={x:newPt.x,y:newPt.y};
+        var c2=defaultControl(prev.from, prev.to);
+        prev.cx=c2.x; prev.cy=c2.y;
+      }
+    }
+  }
+  function attachPassEndpointToPlayer(run, which, playerId){
+    var idxExcl=tempsIndexOf(run.tempsId)+1;
+    var pPos=chainedPositionUpTo(playerId, idxExcl);
+    var other = which==='from' ? run.to : run.from;
+    var dx=other.x-pPos.x, dy=other.y-pPos.y, len=Math.hypot(dx,dy)||1;
+    var ux=dx/len, uy=dy/len;
+    var gap=1.7+0.75+0.4; // rayon pion + rayon ballon + marge, pour éviter la superposition
+    var off=Math.min(gap, Math.max(0,(len-0.6)/2));
+    var newPt={x:pPos.x+ux*off, y:pPos.y+uy*off};
+    var oldPt={x:run[which].x, y:run[which].y};
+    run[which]=newPt;
+    var c=defaultControl(run.from, run.to);
+    run.cx=c.x; run.cy=c.y;
+    cascadeEndpointChange(run, which, oldPt, newPt);
+  }
+  function startEndpointDrag(id,which,e){
+    var run=state.runs.find(function(r){return r.id===id;});
+    if(!run) return;
+    endpointDrag={id:id, which:which, oldPt:{x:run[which].x, y:run[which].y}};
+    window.addEventListener('pointermove', onEndpointMove);
+    window.addEventListener('pointerup', onEndpointUp);
+  }
+  function onEndpointMove(e){
+    if(!endpointDrag) return;
+    var run=state.runs.find(function(r){return r.id===endpointDrag.id;});
+    if(!run) return;
+    var p=screenToLogical(e);
+    var x=clamp(p.x,-9,PL+9), y=clamp(p.y,-7,PW+7);
+    var snap=applySnap(run.actorId,x,y);
+    if(snap.x!==null) x=snap.x;
+    if(snap.y!==null) y=snap.y;
+    run[endpointDrag.which]={x:x,y:y};
+    var c=defaultControl(run.from, run.to);
+    run.cx=c.x; run.cy=c.y;
+    drawGuides(snap);
+    renderArrows();
+  }
+  function onEndpointUp(){
+    if(!endpointDrag) return;
+    var run=state.runs.find(function(r){return r.id===endpointDrag.id;});
+    if(run){
+      var newPt={x:run[endpointDrag.which].x, y:run[endpointDrag.which].y};
+      cascadeEndpointChange(run, endpointDrag.which, endpointDrag.oldPt, newPt);
+      if(run.kind==='pass'){
+        if(endpointDrag.which==='to') run.receiverId = findPlayerNear(newPt.x,newPt.y,2.5);
+        else run.fromPlayerId = findPlayerNear(newPt.x,newPt.y,2.5);
+      }
+    }
+    endpointDrag=null;
+    window.removeEventListener('pointermove', onEndpointMove);
+    window.removeEventListener('pointerup', onEndpointUp);
+    gGuides.innerHTML='';
+    renderAll();
+  }
+
   // ---------------- Editeur de course sélectionnée ----------------
   function renderRunEditor(){
     var host=document.getElementById('runEditorHost');
@@ -1609,6 +1709,36 @@
       sel.addEventListener('change', function(){ run.actorId=sel.value; renderAll(); });
       reassignRow.appendChild(sel);
       box.appendChild(reassignRow);
+    }
+
+    if(run.kind==='pass'){
+      function playerAssocSelect(labelText, currentId, onPick){
+        var row=document.createElement('div'); row.className='slider-row';
+        var top=document.createElement('div'); top.className='sr-top';
+        var lab=document.createElement('span'); lab.textContent=labelText;
+        top.appendChild(lab); row.appendChild(top);
+        var sel2=document.createElement('select');
+        sel2.style.cssText='width:100%;background:var(--panel);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 8px;font-size:12.5px;';
+        var opt0=document.createElement('option'); opt0.value=''; opt0.textContent='Point libre (non associé)';
+        sel2.appendChild(opt0);
+        state.players.forEach(function(p){
+          var opt=document.createElement('option'); opt.value=p.id; opt.textContent=actorLabel(p.id);
+          if(currentId===p.id) opt.selected=true;
+          sel2.appendChild(opt);
+        });
+        if(!currentId) opt0.selected=true;
+        sel2.addEventListener('change', function(){ onPick(sel2.value||null); renderAll(); });
+        row.appendChild(sel2);
+        return row;
+      }
+      box.appendChild(playerAssocSelect('Point de départ associé à', run.fromPlayerId, function(val){
+        run.fromPlayerId=val;
+        if(val) attachPassEndpointToPlayer(run,'from',val);
+      }));
+      box.appendChild(playerAssocSelect('Point d\'arrivée associé à', run.receiverId, function(val){
+        run.receiverId=val;
+        if(val) attachPassEndpointToPlayer(run,'to',val);
+      }));
     }
 
     var maxOthers=0;
@@ -2097,14 +2227,6 @@
     var fromPoint=chainedPositionUpTo(id, tempsIndexOf(state.activeTempsId)+1);
     return {kind:mode, actorId:id, fromPoint:fromPoint, editRun:null, anchorRun:null};
   }
-  function cascadeUpdateFrom(run, oldTo, newTo){
-    var next=findNextRun(run);
-    if(next && Math.abs(next.from.x-oldTo.x)<0.01 && Math.abs(next.from.y-oldTo.y)<0.01){
-      next.from={x:newTo.x,y:newTo.y};
-      var c=defaultControl(next.from, next.to);
-      next.cx=c.x; next.cy=c.y;
-    }
-  }
   function findPlayerNear(x,y,tol){
     var best=null, bestD=tol;
     var idxExcl=tempsIndexOf(state.activeTempsId)+1;
@@ -2126,6 +2248,7 @@
       if(!state.selection || state.selection===id){
         if(isValidSourceToken(state.mode,id)){
           drag.traj = buildTraj(state.mode, id);
+          if(state.mode==='pass' && state.passDraft.length) state.passDraft=[];
         }
       } else {
         drag.destFinalize = buildTraj(state.mode, state.selection);
@@ -2301,17 +2424,43 @@
       traj.editRun.to={x:finalPt.x, y:finalPt.y};
       var c=defaultControl(traj.editRun.from, traj.editRun.to);
       traj.editRun.cx=c.x; traj.editRun.cy=c.y;
-      cascadeUpdateFrom(traj.editRun, oldTo, finalPt);
+      cascadeEndpointChange(traj.editRun, 'to', oldTo, finalPt);
       renderAll();
     } else {
       addRun('move', traj.actorId, traj.fromPoint, finalPt);
     }
+  }
+  function createPlayerToPlayerPass(id1, id2){
+    var idxExcl=tempsIndexOf(state.activeTempsId)+1;
+    var p1=chainedPositionUpTo(id1, idxExcl);
+    var p2=chainedPositionUpTo(id2, idxExcl);
+    var dx=p2.x-p1.x, dy=p2.y-p1.y, len=Math.hypot(dx,dy)||1;
+    var ux=dx/len, uy=dy/len;
+    var gap=1.7+0.75+0.4; // rayon pion joueur + rayon ballon + marge, pour éviter la superposition
+    var off=Math.min(gap, Math.max(0,(len-0.6)/2));
+    var from={x:p1.x+ux*off, y:p1.y+uy*off};
+    var to={x:p2.x-ux*off, y:p2.y-uy*off};
+    addRun('pass','ball', from, to, {receiverId:id2, fromPlayerId:id1});
+    state.ball.x=to.x; state.ball.y=to.y;
   }
   function handleActorClick(id){
     if(state.mode==='link'){
       var idx=state.linkDraft.indexOf(id);
       if(idx===-1) state.linkDraft.push(id); else state.linkDraft.splice(idx,1);
       renderLinkDraftPanel(); renderTokens();
+      return;
+    }
+    if(state.mode==='pass' && id!=='ball'){
+      var pidx=state.passDraft.indexOf(id);
+      if(pidx!==-1){ state.passDraft.splice(pidx,1); renderTokens(); return; }
+      state.passDraft.push(id);
+      if(state.passDraft.length>=2){
+        createPlayerToPlayerPass(state.passDraft[0], state.passDraft[1]);
+        state.passDraft=[];
+        renderAll();
+        return;
+      }
+      renderTokens();
     }
   }
   function handlePitchClick(e){
@@ -2672,11 +2821,12 @@
       state.mode=btn.getAttribute('data-mode');
       state.selection=null;
       if(state.mode!=='link') state.linkDraft=[];
+      if(state.mode!=='pass') state.passDraft=[];
       if(state.mode!=='shape-arrow'){ state.arrowDraft=null; gGuides.innerHTML=''; }
       stopPlayback(); state.livePos=null;
       var hint=document.getElementById('hintText');
       if(state.mode==='position') hint.textContent='Glissez un joueur ou le ballon sur le terrain pour le positionner.';
-      else if(state.mode==='pass') hint.textContent="Cliquez sur le ballon puis à l'endroit où il doit arriver — ou glissez le ballon directement. Chaque nouvelle passe s'enchaîne automatiquement après la précédente.";
+      else if(state.mode==='pass') hint.textContent="Cliquez sur le ballon puis à l'endroit où il doit arriver, ou glissez le ballon directement. Vous pouvez aussi cliquer sur un joueur 1 puis un joueur 2 pour créer directement une passe entre eux. Chaque nouvelle passe s'enchaîne automatiquement après la précédente.";
       else if(state.mode==='move') hint.textContent="Cliquez sur un joueur (ou un fantôme) puis à l'endroit où il doit se déplacer — ou glissez directement. Cliquer un fantôme modifie la trajectoire qui part de lui, sans repasser par le pion initial.";
       else if(state.mode==='link') hint.textContent='Cliquez sur 2 joueurs (ou le ballon) pour un simple trait ; à partir de 3, la forme se ferme automatiquement (triangle, carré, pentagone...).';
       else if(state.mode==='shape-rect') hint.textContent='Cliquez-glissez sur le terrain pour dessiner un rectangle.';
