@@ -517,11 +517,10 @@
         <input type="file" id="importSchemasFile" accept="application/json,.json" style="display:none;">
         <div class="save-note">Sur mobile, « Exporter » ouvre le menu de partage natif (Drive, e-mail, etc. selon les apps installées). Sur ordinateur, le fichier se télécharge directement. Importez-le ensuite sur l'autre appareil.</div>
         <div class="sep-h"></div>
-        <div class="cluster-label" style="margin-bottom:6px;">☁️ Google Drive</div>
-        <button class="full-btn" id="btnDriveConnect">Se connecter à Google Drive</button>
-        <button class="full-btn" id="btnDriveSave" style="display:none;">☁️ Sauvegarder sur Drive</button>
-        <button class="full-btn" id="btnDriveLoad" style="display:none;">☁️ Charger depuis Drive</button>
-        <div id="driveStatus" class="save-note">Non connecté.</div>
+        <div class="cluster-label" style="margin-bottom:6px;">☁️ Stockage partagé (tous les éducateurs)</div>
+        <button class="full-btn" id="btnCloudSave">☁️ Sauvegarder sur le stockage partagé</button>
+        <button class="full-btn" id="btnCloudLoad">☁️ Charger depuis le stockage partagé</button>
+        <div id="cloudStatus" class="save-note">Prêt. Tous les appareils qui utilisent cette appli partagent le même stockage, quel que soit le compte utilisé.</div>
       </div>
     </div>
 
@@ -570,6 +569,8 @@
 
 </div>
 
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
 <script>
 
 
@@ -2996,149 +2997,70 @@
     reader.readAsText(file);
   });
 
-  // ---------------- Google Drive ----------------
-  var GOOGLE_CLIENT_ID='521371715594-0m10h5fppn1c8dpjp2694kvbt2r155p1.apps.googleusercontent.com';
-  var DRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
-  var DRIVE_FOLDER_NAME='Ardoise tactique - Sauvegardes';
-  var DRIVE_FILE_NAME='ardoise-tactique-sauvegarde.json';
-  var gisTokenClient=null;
-  var driveAccessToken=null;
-  var driveTokenExpiry=0;
-  var driveCurrentCb=null;
+  // ---------------- Stockage partagé (Firebase) ----------------
+  // Tous les appareils utilisant cette appli lisent/écrivent le même document,
+  // sans connexion Google individuelle : l'accès reste protégé par le code PIN de l'appli.
+  var FIREBASE_CONFIG={
+    apiKey: "AIzaSyBDo7HodO75uGEqtWBKDLV_tCQ3YWZ1zMY",
+    authDomain: "tableau-tactique.firebaseapp.com",
+    databaseURL: "https://tableau-tactique-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "tableau-tactique",
+    storageBucket: "tableau-tactique.firebasestorage.app",
+    messagingSenderId: "1020764535297",
+    appId: "1:1020764535297:web:7423b7e3a72154a1a39e00"
+  };
+  var CLOUD_PATH='ardoise-tactique/sauvegarde-partagee';
+  var fbDb=null;
 
-  function driveSetStatus(msg){ document.getElementById('driveStatus').textContent=msg; }
-  function driveSetConnected(connected){
-    document.getElementById('btnDriveConnect').textContent = connected ? 'Changer de compte Google' : 'Se connecter à Google Drive';
-    document.getElementById('btnDriveSave').style.display = connected ? 'block' : 'none';
-    document.getElementById('btnDriveLoad').style.display = connected ? 'block' : 'none';
+  function cloudSetStatus(msg){ document.getElementById('cloudStatus').textContent=msg; }
+
+  function ensureFirebase(){
+    if(fbDb) return fbDb;
+    if(typeof firebase==='undefined'){ throw new Error("Le service de stockage n'a pas pu se charger (vérifiez votre connexion internet)."); }
+    if(!(firebase.apps && firebase.apps.length)) firebase.initializeApp(FIREBASE_CONFIG);
+    fbDb = firebase.database();
+    return fbDb;
   }
 
-  function loadGisScript(cb, errCb){
-    if(window.google && google.accounts && google.accounts.oauth2){ cb(); return; }
-    var s=document.createElement('script');
-    s.src='https://accounts.google.com/gsi/client';
-    s.async=true; s.defer=true;
-    s.onload=cb;
-    s.onerror=errCb;
-    document.head.appendChild(s);
-  }
-
-  function ensureDriveToken(cb, forceConsent){
-    loadGisScript(function(){
-      if(!gisTokenClient){
-        gisTokenClient=google.accounts.oauth2.initTokenClient({
-          client_id: GOOGLE_CLIENT_ID,
-          scope: DRIVE_SCOPE,
-          callback: function(resp){
-            if(resp.error){
-              driveSetStatus('Connexion refusée ou annulée.');
-              driveCurrentCb=null;
-              return;
-            }
-            driveAccessToken=resp.access_token;
-            driveTokenExpiry=Date.now()+(resp.expires_in*1000-60000);
-            driveSetConnected(true);
-            driveSetStatus('Connecté à Google Drive.');
-            var toCall=driveCurrentCb; driveCurrentCb=null;
-            if(toCall) toCall();
-          }
-        });
-      }
-      if(!forceConsent && driveAccessToken && Date.now()<driveTokenExpiry){ cb(); return; }
-      driveCurrentCb=cb;
-      gisTokenClient.requestAccessToken({prompt: forceConsent ? 'consent' : (driveAccessToken ? '' : 'consent')});
-    }, function(){
-      driveSetStatus("Impossible de contacter Google (vérifiez votre connexion internet).");
-    });
-  }
-
-  function driveFetch(url, opts){
-    opts=opts||{};
-    opts.headers=Object.assign({}, opts.headers, {Authorization:'Bearer '+driveAccessToken});
-    return fetch(url, opts).then(function(r){
-      if(!r.ok) return r.text().then(function(t){ throw new Error('HTTP '+r.status+' — '+t.slice(0,140)); });
-      var ct=r.headers.get('content-type')||'';
-      return ct.indexOf('application/json')!==-1 ? r.json() : r.text();
-    });
-  }
-
-  function driveFindOrCreateFolder(){
-    var q=encodeURIComponent("name='"+DRIVE_FOLDER_NAME+"' and mimeType='application/vnd.google-apps.folder' and trashed=false");
-    return driveFetch('https://www.googleapis.com/drive/v3/files?q='+q+'&fields=files(id,name)').then(function(data){
-      if(data.files && data.files.length>0) return data.files[0].id;
-      return driveFetch('https://www.googleapis.com/drive/v3/files', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({name:DRIVE_FOLDER_NAME, mimeType:'application/vnd.google-apps.folder'})
-      }).then(function(f){ return f.id; });
-    });
-  }
-
-  function driveFindFile(folderId){
-    var q=encodeURIComponent("name='"+DRIVE_FILE_NAME+"' and '"+folderId+"' in parents and trashed=false");
-    return driveFetch('https://www.googleapis.com/drive/v3/files?q='+q+'&fields=files(id,name,modifiedTime)').then(function(data){
-      return (data.files && data.files[0]) || null;
-    });
-  }
-
-  function driveSaveBackup(){
-    ensureDriveToken(function(){
-      driveSetStatus('Sauvegarde en cours…');
-      var bundle=buildSchemasBundle();
-      var count=Object.keys(bundle.schemas).length;
-      if(count===0){ driveSetStatus('Aucun schéma enregistré à sauvegarder.'); return; }
-      var content=JSON.stringify(bundle,null,2);
-      driveFindOrCreateFolder().then(function(folderId){
-        return driveFindFile(folderId).then(function(existing){
-          var metadata={name:DRIVE_FILE_NAME, mimeType:'application/json'};
-          if(!existing) metadata.parents=[folderId];
-          var boundary='ardoiseboundary';
-          var body=
-            '--'+boundary+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'+JSON.stringify(metadata)+'\r\n'+
-            '--'+boundary+'\r\nContent-Type: application/json\r\n\r\n'+content+'\r\n'+
-            '--'+boundary+'--';
-          var url=existing
-            ? 'https://www.googleapis.com/upload/drive/v3/files/'+existing.id+'?uploadType=multipart'
-            : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
-          return driveFetch(url, {
-            method: existing ? 'PATCH' : 'POST',
-            headers:{'Content-Type':'multipart/related; boundary='+boundary},
-            body: body
-          });
-        });
-      }).then(function(){
-        driveSetStatus(count+' schéma(s) sauvegardé(s) sur Drive à '+new Date().toLocaleTimeString('fr-FR')+'.');
+  function cloudSaveBackup(){
+    var bundle=buildSchemasBundle();
+    var count=Object.keys(bundle.schemas).length;
+    if(count===0){ cloudSetStatus('Aucun schéma enregistré à sauvegarder.'); return; }
+    cloudSetStatus('Sauvegarde en cours…');
+    try{
+      var db=ensureFirebase();
+      db.ref(CLOUD_PATH).set(bundle).then(function(){
+        cloudSetStatus(count+' schéma(s) sauvegardé(s) sur le stockage partagé à '+new Date().toLocaleTimeString('fr-FR')+'.');
       }).catch(function(err){
-        driveSetStatus('Échec de la sauvegarde Drive : '+err.message);
+        cloudSetStatus('Échec de la sauvegarde : '+err.message);
       });
-    });
+    } catch(err){
+      cloudSetStatus('Échec de la sauvegarde : '+err.message);
+    }
   }
 
-  function driveLoadBackup(){
-    ensureDriveToken(function(){
-      driveSetStatus('Recherche de la sauvegarde sur Drive…');
-      driveFindOrCreateFolder().then(function(folderId){
-        return driveFindFile(folderId);
-      }).then(function(file){
-        if(!file){ driveSetStatus('Aucune sauvegarde trouvée sur Drive pour le moment.'); return; }
-        return driveFetch('https://www.googleapis.com/drive/v3/files/'+file.id+'?alt=media').then(function(bundle){
-          var res=importBundle(bundle);
-          driveSetStatus(res.ok
-            ? res.imported+' schéma(s) chargé(s) depuis Drive (sauvegarde du '+new Date(file.modifiedTime).toLocaleString('fr-FR')+').'
-            : res.msg);
-        });
+  function cloudLoadBackup(){
+    cloudSetStatus('Recherche de la sauvegarde partagée…');
+    try{
+      var db=ensureFirebase();
+      db.ref(CLOUD_PATH).once('value').then(function(snap){
+        var bundle=snap.val();
+        if(!bundle){ cloudSetStatus('Aucune sauvegarde trouvée sur le stockage partagé pour le moment.'); return; }
+        var res=importBundle(bundle);
+        var updated = bundle.exportedAt ? new Date(bundle.exportedAt).toLocaleString('fr-FR') : '?';
+        cloudSetStatus(res.ok
+          ? res.imported+' schéma(s) chargé(s) depuis le stockage partagé (sauvegarde du '+updated+').'
+          : res.msg);
       }).catch(function(err){
-        driveSetStatus('Échec du chargement Drive : '+err.message);
+        cloudSetStatus('Échec du chargement : '+err.message);
       });
-    });
+    } catch(err){
+      cloudSetStatus('Échec du chargement : '+err.message);
+    }
   }
 
-  document.getElementById('btnDriveConnect').addEventListener('click', function(){
-    driveSetStatus('Connexion en cours…');
-    ensureDriveToken(function(){}, true);
-  });
-  document.getElementById('btnDriveSave').addEventListener('click', driveSaveBackup);
-  document.getElementById('btnDriveLoad').addEventListener('click', driveLoadBackup);
+  document.getElementById('btnCloudSave').addEventListener('click', cloudSaveBackup);
+  document.getElementById('btnCloudLoad').addEventListener('click', cloudLoadBackup);
 
   function openSide(which){
     document.getElementById('sideLeft').classList.toggle('mobile-open', which==='left');
