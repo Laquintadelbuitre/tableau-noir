@@ -511,6 +511,10 @@
         <div id="savedList"></div>
         <div class="save-note">Les schémas sont enregistrés dans ce navigateur (localStorage), propres à cet appareil.</div>
         <div class="sep-h"></div>
+        <div class="cluster-label" style="margin-bottom:6px;">🗑 Corbeille</div>
+        <div id="trashList"></div>
+        <div class="save-note">Les schémas supprimés restent récupérables ici pendant 30 jours, puis sont effacés pour de bon.</div>
+        <div class="sep-h"></div>
         <div class="cluster-label" style="margin-bottom:6px;">Travailler sur plusieurs appareils</div>
         <button class="full-btn" id="btnExportSchemas">⬇ Exporter / partager tous les schémas</button>
         <button class="full-btn" id="btnImportSchemas">⬆ Importer des schémas</button>
@@ -2758,10 +2762,58 @@
       return true;
     }catch(e){ return false; }
   }
+  var STORAGE_TRASH_INDEX='ardoise-tactique:trash-index';
+  var TRASH_DAYS=30;
+  function getTrashIndex(){ try{ return JSON.parse(localStorage.getItem(STORAGE_TRASH_INDEX)||'[]'); }catch(e){ return []; } }
+  function setTrashIndex(arr){ localStorage.setItem(STORAGE_TRASH_INDEX, JSON.stringify(arr)); }
+  function purgeExpiredTrash(){
+    var idx=getTrashIndex();
+    var now=Date.now();
+    var kept=[];
+    idx.forEach(function(name){
+      var raw=localStorage.getItem('ardoise-tactique:trash-item:'+name);
+      if(!raw) return;
+      try{
+        var entry=JSON.parse(raw);
+        var age=now-new Date(entry.deletedAt).getTime();
+        if(age>TRASH_DAYS*24*3600*1000){ localStorage.removeItem('ardoise-tactique:trash-item:'+name); }
+        else kept.push(name);
+      }catch(e){}
+    });
+    if(kept.length!==idx.length) setTrashIndex(kept);
+  }
   function deleteSchema(name){
+    var raw=localStorage.getItem('ardoise-tactique:item:'+name);
     localStorage.removeItem('ardoise-tactique:item:'+name);
     setIndex(getIndex().filter(function(n){return n!==name;}));
+    if(raw){
+      localStorage.setItem('ardoise-tactique:trash-item:'+name, JSON.stringify({deletedAt:new Date().toISOString(), data:JSON.parse(raw)}));
+      var tIdx=getTrashIndex();
+      if(tIdx.indexOf(name)===-1){ tIdx.push(name); setTrashIndex(tIdx); }
+    }
     renderSavedList();
+    renderTrashList();
+  }
+  function restoreSchema(name){
+    var raw=localStorage.getItem('ardoise-tactique:trash-item:'+name);
+    if(!raw) return;
+    var entry;
+    try{ entry=JSON.parse(raw); }catch(e){ return; }
+    if(getIndex().indexOf(name)!==-1 && !confirm('Un schéma nommé « '+name+' » existe déjà. Le remplacer par la version restaurée ?')) return;
+    localStorage.setItem('ardoise-tactique:item:'+name, JSON.stringify(entry.data));
+    var idx=getIndex();
+    if(idx.indexOf(name)===-1){ idx.push(name); setIndex(idx); }
+    localStorage.removeItem('ardoise-tactique:trash-item:'+name);
+    setTrashIndex(getTrashIndex().filter(function(n){return n!==name;}));
+    renderSavedList();
+    renderTrashList();
+    cloudRestoreSchema(name, entry.data);
+  }
+  function purgeSchemaForever(name){
+    localStorage.removeItem('ardoise-tactique:trash-item:'+name);
+    setTrashIndex(getTrashIndex().filter(function(n){return n!==name;}));
+    renderTrashList();
+    cloudPurgeSchema(name);
   }
   var DELETE_PIN_HASH='f8d64a31eb7d864da9252b7e5dd2659229cf1a3c4bf9d6d544c0318c81e13cff'; // SHA-256 du code de suppression
   function confirmWithPin(message, cb){
@@ -2778,13 +2830,45 @@
       db.ref(CLOUD_PATH).once('value').then(function(snap){
         var bundle=snap.val();
         if(!bundle || !bundle.schemas || !(name in bundle.schemas)) return null;
+        bundle.trash=bundle.trash||{};
+        bundle.trash[name]={data:bundle.schemas[name], deletedAt:new Date().toISOString()};
         delete bundle.schemas[name];
         bundle.exportedAt=new Date().toISOString();
         return db.ref(CLOUD_PATH).set(bundle);
       }).then(function(){
-        cloudSetStatus('« '+name+' » supprimé du stockage partagé.');
+        cloudSetStatus('« '+name+' » déplacé vers la corbeille du stockage partagé.');
       }).catch(function(){ /* hors-ligne ou indisponible : la suppression locale reste acquise */ });
     } catch(e){ /* stockage partagé injoignable : la suppression locale reste acquise */ }
+  }
+  function cloudRestoreSchema(name, data){
+    try{
+      var db=ensureFirebase();
+      db.ref(CLOUD_PATH).once('value').then(function(snap){
+        var bundle=snap.val() || {app:'ardoise-tactique', version:1, schemas:{}, trash:{}};
+        bundle.schemas=bundle.schemas||{};
+        bundle.trash=bundle.trash||{};
+        bundle.schemas[name]=data;
+        delete bundle.trash[name];
+        bundle.exportedAt=new Date().toISOString();
+        return db.ref(CLOUD_PATH).set(bundle);
+      }).then(function(){
+        cloudSetStatus('« '+name+' » restauré sur le stockage partagé.');
+      }).catch(function(){});
+    } catch(e){}
+  }
+  function cloudPurgeSchema(name){
+    try{
+      var db=ensureFirebase();
+      db.ref(CLOUD_PATH).once('value').then(function(snap){
+        var bundle=snap.val();
+        if(!bundle || !bundle.trash || !(name in bundle.trash)) return null;
+        delete bundle.trash[name];
+        bundle.exportedAt=new Date().toISOString();
+        return db.ref(CLOUD_PATH).set(bundle);
+      }).then(function(){
+        cloudSetStatus('« '+name+' » supprimé définitivement du stockage partagé.');
+      }).catch(function(){});
+    } catch(e){}
   }
   function renderSavedList(){
     var host=document.getElementById('savedList');
@@ -2799,10 +2883,37 @@
       row.appendChild(load);
       var del=document.createElement('button'); del.className='del'; del.textContent='Suppr.';
       del.addEventListener('click', function(){
-        confirmWithPin('Supprimer définitivement le schéma « '+name+' » ? Il sera aussi retiré du stockage partagé pour tous les éducateurs.', function(){
+        confirmWithPin('Déplacer le schéma « '+name+' » vers la corbeille ? Il sera aussi retiré du stockage partagé pour tous les éducateurs (récupérable pendant 30 jours).', function(){
           deleteSchema(name);
           cloudDeleteSchema(name);
-          document.getElementById('statusText').textContent='Schéma « '+name+' » supprimé.';
+          document.getElementById('statusText').textContent='Schéma « '+name+' » déplacé vers la corbeille.';
+        });
+      });
+      row.appendChild(del);
+      host.appendChild(row);
+    });
+  }
+  function renderTrashList(){
+    var host=document.getElementById('trashList');
+    if(!host) return;
+    purgeExpiredTrash();
+    host.innerHTML='';
+    var idx=getTrashIndex();
+    if(idx.length===0){ host.innerHTML='<div class="save-note">Corbeille vide.</div>'; return; }
+    idx.forEach(function(name){
+      var raw=localStorage.getItem('ardoise-tactique:trash-item:'+name);
+      var entry=null; try{ entry=JSON.parse(raw); }catch(e){}
+      var daysLeft = entry ? Math.max(0, TRASH_DAYS-Math.floor((Date.now()-new Date(entry.deletedAt).getTime())/86400000)) : 0;
+      var row=document.createElement('div'); row.className='saved-item';
+      var span=document.createElement('span'); span.textContent=name+' — '+daysLeft+' j restant(s)'; row.appendChild(span);
+      var res=document.createElement('button'); res.textContent='Restaurer';
+      res.addEventListener('click', function(){ restoreSchema(name); });
+      row.appendChild(res);
+      var del=document.createElement('button'); del.className='del'; del.textContent='Suppr. déf.';
+      del.addEventListener('click', function(){
+        confirmWithPin('Supprimer définitivement « '+name+' » de la corbeille (local + stockage partagé) ? Cette action est irréversible.', function(){
+          purgeSchemaForever(name);
+          document.getElementById('statusText').textContent='« '+name+' » supprimé définitivement.';
         });
       });
       row.appendChild(del);
@@ -3009,7 +3120,16 @@
       imported++;
     });
     setIndex(existing);
+    if(bundle.trash){
+      var tIdx=getTrashIndex();
+      Object.keys(bundle.trash).forEach(function(name){
+        localStorage.setItem('ardoise-tactique:trash-item:'+name, JSON.stringify(bundle.trash[name]));
+        if(tIdx.indexOf(name)===-1) tIdx.push(name);
+      });
+      setTrashIndex(tIdx);
+    }
     renderSavedList();
+    renderTrashList();
     return {ok:true, imported:imported, total:names.length};
   }
   document.getElementById('importSchemasFile').addEventListener('change', function(e){
@@ -3500,6 +3620,7 @@
   drawMarkings();
   rebuildPlayers();
   renderSavedList();
+  renderTrashList();
   updateOnlineStatus();
   renderLockSettings();
   showLock();
