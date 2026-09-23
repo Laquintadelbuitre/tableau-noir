@@ -2763,6 +2763,29 @@
     setIndex(getIndex().filter(function(n){return n!==name;}));
     renderSavedList();
   }
+  var DELETE_PIN_HASH='f8d64a31eb7d864da9252b7e5dd2659229cf1a3c4bf9d6d544c0318c81e13cff'; // SHA-256 du code de suppression
+  function confirmWithPin(message, cb){
+    var val=prompt(message+'\n\nEntrez le code de suppression pour confirmer :');
+    if(val===null) return;
+    secureHash(val.trim()).then(function(h){
+      if(h===DELETE_PIN_HASH) cb();
+      else alert('Code incorrect. Suppression annulée.');
+    });
+  }
+  function cloudDeleteSchema(name){
+    try{
+      var db=ensureFirebase();
+      db.ref(CLOUD_PATH).once('value').then(function(snap){
+        var bundle=snap.val();
+        if(!bundle || !bundle.schemas || !(name in bundle.schemas)) return null;
+        delete bundle.schemas[name];
+        bundle.exportedAt=new Date().toISOString();
+        return db.ref(CLOUD_PATH).set(bundle);
+      }).then(function(){
+        cloudSetStatus('« '+name+' » supprimé du stockage partagé.');
+      }).catch(function(){ /* hors-ligne ou indisponible : la suppression locale reste acquise */ });
+    } catch(e){ /* stockage partagé injoignable : la suppression locale reste acquise */ }
+  }
   function renderSavedList(){
     var host=document.getElementById('savedList');
     host.innerHTML='';
@@ -2775,7 +2798,13 @@
       load.addEventListener('click', function(){ loadSchema(name); });
       row.appendChild(load);
       var del=document.createElement('button'); del.className='del'; del.textContent='Suppr.';
-      del.addEventListener('click', function(){ if(confirm('Supprimer le schéma « '+name+' » ?')) deleteSchema(name); });
+      del.addEventListener('click', function(){
+        confirmWithPin('Supprimer définitivement le schéma « '+name+' » ? Il sera aussi retiré du stockage partagé pour tous les éducateurs.', function(){
+          deleteSchema(name);
+          cloudDeleteSchema(name);
+          document.getElementById('statusText').textContent='Schéma « '+name+' » supprimé.';
+        });
+      });
       row.appendChild(del);
       host.appendChild(row);
     });
